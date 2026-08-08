@@ -374,3 +374,74 @@ question because our system is currently passive-only.
 `run_eval --all` passes for all 20 candidates including the new follow-up-rate, day-citation,
 transcript-budget and concurrency assertions; `next build` clean; `/health` live; a
 rate-limited live run recovered through retry rather than failing.
+
+---
+
+### [9] 2026-08-09 — Cross-verification against the problem statement itself
+**Author:** Yash · **Tool:** Claude Code (Opus 5)
+
+**Prompts (verbatim, two in sequence):**
+> now can you cross verify if everything asked has been implemented in the best possible
+> manner or not and if not make it, i want the absolute best results and system design
+> [followed by the full problem statement]
+
+> cross verify by considering all possible different perspectives of seeing the problem i
+> want every cases should be covered in best possible manner
+
+> proceed in the direction that is correct and best for us by considering the results for
+> the above cross verification, i want the absolute best such that all the differen
+> perception of the given problem statements should be covered in depth
+
+**The finding that mattered most.** Re-reading the Situation section rather than the
+Minimum Requirements: graduates *"should be able to confidently explain the systems they
+built"*, and *"effectively communicating this knowledge remains one of the biggest
+challenges."* The product is interview **preparation**, not examination — but all four
+scoring axes measured knowledge. The system addressed half its own brief.
+
+Added `communication` as a fifth axis, reported beside knowledge and never averaged into
+it. Its mirror of the bluffing flag is `undersells`: high knowledge, low delivery — the
+exact population the brief describes.
+
+**That fix failed on the first attempt, and the failure is the interesting part.** Scored
+directly, a rambling answer containing the right facts came out `1/1/1` — *identical to a
+confidently wrong answer*. Delivery was dragging the knowledge scores down, collapsing the
+one distinction the axis exists to draw. Strengthening the prompt wording did not fix it.
+What did: a `claims` field the model must fill first, listing each technical claim with the
+filler stripped, after which knowledge is scored from that list alone.
+
+| Answer | knowledge | communication |
+|---|---|---|
+| clear and correct | 3.3 | 4 |
+| same facts, rambling | 1.7 | 1 |
+| confident but wrong | 0.3 | 2 |
+| precise facts, bad delivery | **3.7** | **2** → `undersells` |
+
+**Other perspectives taken, each finding something:**
+
+- *"Assess the concepts they have completed."* Audit found 4/20 candidates asked about days
+  their record never mentions — an unknown SHIP_IT day scored 30+12 against a mastered
+  SETUP day's 55−25, and a module rule discarded deferred days so an unrecorded one took
+  the slot. Rebuilt as four explicit passes. **0/160 questions** now target an unrecorded
+  day, asserted.
+- *"Resemble a real technical interview rather than a scripted questionnaire."* Live, a
+  candidate asking *"do you mean the retrieval step or the embedding step?"* had its own
+  question re-asked verbatim, and an honest *"I don't remember"* was pressed with a
+  rephrasing. Turns now classify intent — clarify is unscored and does not consume the
+  slot, concede advances without pressing.
+- *The seven headline topics.* MCP appears in only 3/20 plans because only 3 candidates have
+  Day 23 recorded. Correct, but indistinguishable from failing it. The report now names
+  what was not assessed and why.
+- *Hostile input.* Ten malformed profiles and twelve malformed requests. Found: a mission
+  citing a day outside the curriculum raised `KeyError` at the endpoint; `name`/`jobRole`
+  flow into the prompt so **injection via the profile** was possible, not just via the
+  answer; an all-skipped record 500'd on a 3-module target that is ours rather than the
+  brief's; `sessionId` was unbounded.
+
+**Two bugs introduced by my own fixes, caught by testing them rather than assuming:**
+concede advanced the slot while the model's reply still probed the old topic — state and
+words disagreed, so the rule moved into the prompt; and a per-slot clarification budget let
+a purely-clarifying candidate run to the turn cap, so it became per-session.
+
+**Verified:** 8 personas pass, 20/20 candidates, secrets clean on 44 files, `next build`
+clean. Live end to end, the report's first next-step was *"Rehearse starting every answer by
+restating the specific question asked"* — genuine interview coaching rather than grading.
