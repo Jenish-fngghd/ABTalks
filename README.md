@@ -110,8 +110,9 @@ difficulty) that powers the UI. Clients that only read the spec fields are unaff
 ```bash
 pip install -r requirements.txt
 cp .env.example .env          # add LLM_API_KEY; any OpenAI-compatible endpoint works
-uvicorn app.main:app --reload
-python -m eval.run_eval       # the check; runs offline without a key
+uvicorn app.main:app --reload            # API on :8000
+cd web && npm install && npm run dev     # UI on :3000
+python -m eval.run_eval                  # the check; runs offline without a key
 ```
 
 Provider is set by `LLM_BASE_URL` / `LLM_MODEL`, so switching between the sponsor
@@ -154,18 +155,48 @@ app/
   interviewer.py  the loop: prompts, turn handling, follow-up policy, report
   llm.py          OpenAI-compatible client + offline stand-in
   store.py        in-memory session store
-eval/run_eval.py  personas + assertions
+eval/
+  run_eval.py     personas + assertions
+  bench_models.py cross-provider model comparison on this task
+web/
+  app/page.tsx           phase machine: pick -> interview -> report
+  components/            CoveragePanel, Transcript, Composer, Report, CandidatePicker
+  lib/api.ts             typed client for the endpoint
 data/             curriculum.json, candidates.json
+Dockerfile        backend image (single worker, deliberately)
+render.yaml       backend deploy config
 ```
 
 Domain logic imports without a server running, which is what makes the eval cheap.
 
+## The interface
+
+Two screens, both built around the same idea: show the reasoning, not just the output.
+
+**Interview.** A permanent panel lists every planned question, the curriculum day it
+targets, its intent (`verify` / `gap` / `depth` / `trade-offs` / `diagnose`), and — for the
+current question — the plain-English reason that day was chosen. Coverage and difficulty
+update live. Scoring takes seconds, so the wait state names what it is doing ("Assessing
+your answer against Day 12") rather than showing a bare spinner.
+
+**Report.** Rubric averages, a per-day breakdown, and grounded strengths/gaps/next. When
+terminology outran specificity by two points or more, the report says so explicitly rather
+than burying it in prose.
+
+Theme tokens are defined for light and dark, and no colour is defined only inside a media
+query. All motion respects `prefers-reduced-motion`; the interview is fully keyboard
+operable, with focus returning to the input whenever the interviewer finishes speaking and
+new turns announced through an ARIA live region.
+
 ## Deployment
 
 Backend needs a host without a short serverless timeout — model calls run several seconds
-per turn. Sessions are in-memory, so the app runs with **one worker**; a redeploy drops
-in-flight interviews. Swapping `store.py` for Redis is a three-method change if that ever
-matters.
+per turn — so it ships as a container (`Dockerfile`, `render.yaml`) rather than a
+serverless function. Frontend is a static Next.js build; point `NEXT_PUBLIC_API_URL` at the
+backend.
+
+Sessions are in-memory, so the app runs with **one worker**; a redeploy drops in-flight
+interviews. Swapping `store.py` for Redis is a three-method change if that ever matters.
 
 ## Security
 

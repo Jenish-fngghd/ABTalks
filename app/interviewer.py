@@ -194,7 +194,9 @@ class Session:
         current.answer = message or "(no answer given)"
 
         forced_advance = (
-            self.followups >= MAX_FOLLOWUPS_PER_SLOT or len(self.turns) >= MAX_TURNS - 1
+            self.followups >= MAX_FOLLOWUPS_PER_SLOT
+            or len(self.turns) >= MAX_TURNS - 1
+            or not self._followup_is_working()
         )
         q = self.plan[self.slot]
         next_q = self.plan[self.slot + 1] if self.slot + 1 < len(self.plan) else None
@@ -236,6 +238,20 @@ class Session:
             Turn(slot=self.slot, day=day_num, question=result.reply, is_followup=is_followup)
         )
         return result.reply, False
+
+    def _followup_is_working(self) -> bool:
+        """A second probe is earned, not free.
+
+        Observed with a live model: when a candidate gives the same non-answer
+        twice, the interviewer will happily re-ask a near-identical question and
+        burn the turn. So a slot only gets another follow-up if the previous one
+        actually moved the score. Chasing a bluffer who is starting to give ground
+        is good interviewing; asking the same thing three times is not.
+        """
+        if self.followups == 0:
+            return True
+        scored = [t.assessment.score for t in self.turns if t.slot == self.slot and t.assessment]
+        return len(scored) < 2 or scored[-1] > scored[-2]
 
     def _next_action_instruction(
         self, forced: bool, next_q: PlannedQuestion | None

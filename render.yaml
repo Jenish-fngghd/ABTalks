@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: interview-agent-api
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: LLM_BASE_URL
+        value: https://api.groq.com/openai/v1
+      - key: LLM_MODEL
+        value: openai/gpt-oss-120b
+      - key: LLM_API_KEY
+        sync: false # set in the Render dashboard; never committed
+      - key: CORS_ORIGINS
+        value: "*"
