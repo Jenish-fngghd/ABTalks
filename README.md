@@ -9,6 +9,30 @@ candidate actually said.
 
 ---
 
+Full design rationale, sourcing, and measurements: **[DESIGN.md](DESIGN.md)**.
+
+## Architecture
+
+```mermaid
+flowchart TD
+    UI["Next.js UI<br/>interview · report"] -->|"POST /api/interview"| API["FastAPI<br/>validation · 409 on double-submit"]
+    API --> STORE[("Session store<br/>in-process dict + lock")]
+    API --> S["Session<br/>turn loop · coverage · scores"]
+
+    C["curriculum.json<br/>~4.4k tokens"] --> P
+    CAND["candidate record"] --> PROF["profile.py<br/>day signals + posture"]
+    PROF --> P["planner.py<br/>≥8 questions / ≥4 days<br/>raises if non-compliant"]
+    C --> G["curriculum.py<br/>derived ordering"]
+    G --> P
+    P --> S
+
+    S --> LLM["llm.py<br/>json_object + 1 retry"]
+    LLM -->|primary| GROQ["Groq · gpt-oss-20b"]
+    LLM -.->|"429 / timeout / 5xx"| NIM["NVIDIA NIM · nemotron-3-super"]
+    S --> FB["Feedback<br/>summary · strengths · gaps · next"]
+    FB --> API
+```
+
 ## The core idea
 
 Most interview agents put the whole interview in the prompt and hope the model asks
