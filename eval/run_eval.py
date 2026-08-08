@@ -101,7 +101,14 @@ def check(session: Session, persona: str) -> list[str]:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--all", action="store_true", help="run every candidate, strong persona")
+    ap.add_argument("--live", action="store_true", help="use the configured provider (costs tokens)")
     args = ap.parse_args()
+
+    # Offline by default even when .env has a key. This suite is meant to be free
+    # to run on every commit; during development it quietly consumed a provider's
+    # entire daily token allowance because it picked the key up automatically.
+    if not args.live:
+        llm.OFFLINE = True
 
     candidates = load_candidates()
     print(f"provider={'OFFLINE stand-in' if llm.OFFLINE else llm.MODEL}\n")

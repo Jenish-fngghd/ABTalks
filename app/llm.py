@@ -48,29 +48,68 @@ def _extract_json(text: str) -> str:
     return text[start : end + 1] if start != -1 and end > start else text
 
 
-def structured(
-    system: str, user: str, model_cls: type[T], *, temperature: float = 0.6
-) -> T:
-    """One call, validated into `model_cls`. Retries once on malformed output.
+def _keys() -> list[str]:
+    """Primary key first, then any spares.
+
+    Groq's free tier caps tokens per day per key, and we hit that ceiling during
+    development. Rotating on 429 keeps a live demo alive instead of dying halfway
+    through an interview.
+    """
+    extra = [os.getenv("LLM_API_KEY_2", ""), os.getenv("LLM_API_KEY_3", "")]
+    return [k for k in [API_KEY, *extra] if k]
+
+
+def structured_ex(
+    system: str,
+    user: str,
+    model_cls: type[T],
+    *,
+    temperature: float = 0.6,
+    client: Any = None,
+    model: str | None = None,
+) -> tuple[T, int]:
+    """One call, validated into `model_cls`. Returns (result, attempts_used).
+
+    Retries once with the schema attached when output does not validate, and
+    rotates to a spare API key on a rate limit.
 
     ponytail: json_object mode + parse + one retry, rather than provider-specific
     json_schema. Open-weight endpoints support the former far more consistently.
     """
-    if OFFLINE:
-        return _offline(user, model_cls)
+    if OFFLINE and client is None:
+        return _offline(user, model_cls), 1
+
+    from openai import RateLimitError
 
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
+    keys = _keys()
+    key_index = 0
     last: Exception | None = None
-    for attempt in range(2):
-        resp = _client_once().chat.completions.create(
-            model=MODEL,
-            messages=messages,
-            temperature=temperature,
-            response_format={"type": "json_object"},
-        )
+
+    for attempt in range(1, 4):
+        active = client or _client_once()
+        try:
+            resp = active.chat.completions.create(
+                model=model or MODEL,
+                messages=messages,
+                temperature=temperature,
+                response_format={"type": "json_object"},
+            )
+        except RateLimitError as exc:
+            last = exc
+            key_index += 1
+            if client is not None or key_index >= len(keys):
+                raise
+            from openai import OpenAI
+
+            globals()["_client"] = OpenAI(
+                base_url=BASE_URL, api_key=keys[key_index], timeout=TIMEOUT
+            )
+            continue
+
         raw = resp.choices[0].message.content or ""
         try:
-            return model_cls.model_validate_json(_extract_json(raw))
+            return model_cls.model_validate_json(_extract_json(raw)), attempt
         except (ValidationError, ValueError) as exc:
             last = exc
             messages.append({"role": "assistant", "content": raw})
@@ -83,7 +122,13 @@ def structured(
                     ),
                 }
             )
-    raise RuntimeError(f"model returned unusable JSON twice: {last}")
+    raise RuntimeError(f"model returned unusable JSON after retries: {last}")
+
+
+def structured(
+    system: str, user: str, model_cls: type[T], *, temperature: float = 0.6
+) -> T:
+    return structured_ex(system, user, model_cls, temperature=temperature)[0]
 
 
 # --- offline test double ------------------------------------------------------

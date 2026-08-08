@@ -34,6 +34,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app import curriculum as cur  # noqa: E402
 from app.interviewer import PERSONA, SCORING_GUIDE  # noqa: E402
+from app.llm import structured_ex  # noqa: E402
 from app.planner import build_plan  # noqa: E402
 from app.profile import posture  # noqa: E402
 from app.schemas import TurnResult  # noqa: E402
@@ -97,25 +98,18 @@ def scoring_prompt(candidate: dict, answer: str) -> str:
 
 
 def score_once(client, model: str, prompt: str) -> tuple[TurnResult | None, float, bool]:
-    """Returns (result, seconds, first_try_valid)."""
-    started = time.perf_counter()
-    resp = client.chat.completions.create(
-        model=model,
-        messages=[{"role": "system", "content": PERSONA}, {"role": "user", "content": prompt}],
-        temperature=0.3,
-        response_format={"type": "json_object"},
-    )
-    elapsed = time.perf_counter() - started
-    raw = resp.choices[0].message.content or ""
-    try:
-        return TurnResult.model_validate_json(raw), elapsed, True
-    except Exception:
-        from app.llm import _extract_json
+    """Returns (result, seconds, validated_first_try).
 
-        try:
-            return TurnResult.model_validate_json(_extract_json(raw)), elapsed, False
-        except Exception:
-            return None, elapsed, False
+    Goes through the app's own `structured_ex` rather than re-implementing the
+    call. An earlier version of this bench parsed the response itself, had no
+    retry, and reported every model as scoring 0.0 -- it was measuring its own
+    missing retry loop, not the models.
+    """
+    started = time.perf_counter()
+    result, attempts = structured_ex(
+        PERSONA, prompt, TurnResult, temperature=0.3, client=client, model=model
+    )
+    return result, time.perf_counter() - started, attempts == 1
 
 
 def bench(model: str, candidate: dict, reps: int) -> dict:
