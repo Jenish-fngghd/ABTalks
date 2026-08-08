@@ -194,6 +194,19 @@ class Session:
 
     # --- turns ---------------------------------------------------------------
 
+    @staticmethod
+    def _gap_framing(q: PlannedQuestion) -> str:
+        """Extra instruction when a question exists to expose a skipped prerequisite."""
+        if q.gap_day is None:
+            return ""
+        return (
+            f"\nThis question exists to expose a gap: they skipped Day {q.gap_day} "
+            f"({q.gap_topic}), which Day {q.day} depends on. Ask about Day {q.day} in a way "
+            f"that cannot be answered well without understanding Day {q.gap_day}. Do not "
+            f"mention that you are testing for the gap, and do not accuse them of skipping "
+            f"anything."
+        )
+
     def start(self) -> str:
         q = self.plan[0]
         prompt = (
@@ -202,7 +215,9 @@ class Session:
             f"sentence, then ask your first question.\n\n"
             f"FIRST QUESTION TARGET — Day {q.day}, {q.topic}\n"
             f"Why this day: {q.reason}\n"
-            f"Intent: {q.intent}. Difficulty: {q.difficulty}.\n\n"
+            f"Intent: {q.intent}. Difficulty: {q.difficulty}."
+            + self._gap_framing(q)
+            + "\n\n"
             f"CURRICULUM REFERENCE:\n{cur.brief(q.day)}\n\n"
             'Reply as JSON: {"reply": "<greeting and first question>"}'
         )
@@ -287,8 +302,9 @@ class Session:
                 'You must move on: set action to "advance". In `reply`, acknowledge their '
                 f"answer in a few words, then ask about Day {next_q.day}, {next_q.topic}.\n"
                 f"Why this day: {next_q.reason}\n"
-                f"Intent: {next_q.intent}. Difficulty: {self.difficulty()}.\n"
-                f"CURRICULUM REFERENCE:\n{cur.brief(next_q.day)}"
+                f"Intent: {next_q.intent}. Difficulty: {self.difficulty()}."
+                + self._gap_framing(next_q)
+                + f"\nCURRICULUM REFERENCE:\n{cur.brief(next_q.day)}"
             )
         return (
             'Decide: "followup" if the answer was vague, wrong, or fluent-but-hollow '
@@ -296,8 +312,9 @@ class Session:
             'then `reply` is that probe. Otherwise "advance" -- then `reply` acknowledges '
             f"briefly and asks about Day {next_q.day}, {next_q.topic}.\n"
             f"Why this day: {next_q.reason}\n"
-            f"Intent: {next_q.intent}. Difficulty: {self.difficulty()}.\n"
-            f"CURRICULUM REFERENCE:\n{cur.brief(next_q.day)}"
+            f"Intent: {next_q.intent}. Difficulty: {self.difficulty()}."
+            + self._gap_framing(next_q)
+            + f"\nCURRICULUM REFERENCE:\n{cur.brief(next_q.day)}"
         )
 
     def _report(self) -> Feedback:

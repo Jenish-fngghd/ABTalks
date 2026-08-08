@@ -44,9 +44,10 @@ def _reason(sig: DaySignal, title: str) -> str:
             "Check whether the difficulty was understood or worked around."
         )
     if sig.status == "skipped":
-        blocked = [d for d in cur.downstream(sig.day)[:3]]
-        tail = f" Later days {blocked} build on it." if blocked else ""
-        return f"Skipped Day {sig.day} ({title}).{tail} Probe the gap without assuming zero knowledge."
+        return (
+            f"Skipped Day {sig.day} ({title}). Asking about it directly only confirms "
+            "they were not there, so probe it through a later day that assumes it."
+        )
     if sig.status == "mastered":
         n = sig.attempts or 1
         return (
@@ -109,22 +110,48 @@ def build_plan(candidate: dict, size: int = MIN_QUESTIONS) -> list[PlannedQuesti
     per_day: dict[int, int] = {}
     modules: set[int] = set()
 
+    def _bridge_target(gap: int) -> int | None:
+        """Nearest later day the candidate actually has a record for.
+
+        This is the one place the curriculum graph changes a decision rather than
+        decorating an explanation: a skipped day is interrogated through the
+        downstream day that depends on it, because that is where the gap surfaces
+        as an answer they cannot complete.
+        """
+        for later in cur.downstream(gap):
+            sig = signals.get(later)
+            if sig and sig.status in ("mastered", "struggled"):
+                return later
+        return None
+
     def take(sig: DaySignal) -> None:
         intent, difficulty = _intent_and_difficulty(sig, post)
-        d = cur.day(sig.day)
+        ask_day, gap_day, gap_topic = sig.day, None, None
+
+        if sig.status == "skipped":
+            via = _bridge_target(sig.day)
+            # Only redirect if the bridge day is not already carrying questions,
+            # otherwise we would crowd one day and lose curriculum spread.
+            if via is not None and per_day.get(via, 0) < MAX_PER_DAY:
+                ask_day = via
+                gap_day, gap_topic = sig.day, cur.day(sig.day)["title"]
+
+        d = cur.day(ask_day)
         plan.append(
             PlannedQuestion(
-                day=sig.day,
-                module=cur.module_num(sig.day),
+                day=ask_day,
+                module=cur.module_num(ask_day),
                 topic=d["title"],
                 intent=intent,  # type: ignore[arg-type]
                 difficulty=difficulty,  # type: ignore[arg-type]
-                reason=_reason(sig, d["title"]),
+                reason=_reason(sig, cur.day(sig.day)["title"]),
                 priority=_priority(sig, post),
+                gap_day=gap_day,
+                gap_topic=gap_topic,
             )
         )
-        per_day[sig.day] = per_day.get(sig.day, 0) + 1
-        modules.add(cur.module_num(sig.day))
+        per_day[ask_day] = per_day.get(ask_day, 0) + 1
+        modules.add(cur.module_num(ask_day))
 
     # Pass 1: spread. One question per day, one day per module, highest priority
     # first. This front-loads the diversity requirement so it cannot be missed.

@@ -146,19 +146,39 @@ Now apply it honestly to this project:
 
 ## 4. Model selection — including open-weight models
 
-The hackathon provides a **free breeth starter account with an API key** (confirm the exact platform name from the sponsor materials before writing it into the doc; if it differs, use the real name). breeth serves open-weight models on dedicated/serverless GPUs.
+**Correction, recorded rather than silently edited:** an earlier version of this section
+claimed the sponsor account ("breeth") was a GPU inference platform serving open-weight
+models. That was a guess from the name and it was wrong.
 
-Deliver a model strategy that:
-1. **Inventories what the sponsor platform actually offers** — fetch its current model library and pricing page. Do not rely on memory. List concrete available model IDs.
+**Breeth** (<https://www.thebreeth.com/>) is an *intent-aware memory layer for AI agents* —
+a graph of entities and edges where each fact carries `cognitive_pattern` (a behavioural
+model such as "risk-averse on stack changes"), `why_connected` (the reasoning behind a
+relationship), and `director_vision` (high-level intent). It supports confidence decay and
+retraction, and is reached via an MCP server or a REST API. It is **not** a model provider,
+so it does not belong in this section's model strategy at all — see §4b.
+
+Model hosting therefore comes from elsewhere (Groq and NVIDIA NIM were used). Deliver a
+model strategy that:
+1. **Inventories what each provider actually offers** — fetch the live `/models` endpoint and the pricing page. Do not rely on memory. List concrete available model IDs.
 2. Evaluates **open-weight candidates** across families — Meta (Llama), Google (Gemma), NVIDIA (Nemotron), Alibaba (Qwen), DeepSeek, Mistral, OpenAI open-weight releases, Microsoft (Phi). For each shortlisted model: parameter count, context window, license (note that some are *open-weight*, not OSI open-source — say so precisely), instruction-following and reasoning benchmark evidence with source, and structured-output reliability.
 3. Assigns a model **per role**, with justification:
    - Interviewer turn (latency-critical, conversational)
    - Answer scoring / judging (accuracy-critical, structured output)
    - Final report synthesis (long-context, one call per session)
    - Optional: embeddings, if §3a kept retrieval
-4. Uses the sponsor credits as the **primary path**, with a hosted frontier API as documented fallback. Say what breaks if the sponsor endpoint is cold or rate-limited (serverless GPU cold starts are a real demo risk — quantify and mitigate, e.g. warm-up ping before the demo).
+4. Names a **primary and a fallback on a different provider**. Free tiers cap tokens per *organization*, not per key, so spare keys from the same account are not a fallback. Say what breaks when the primary is exhausted, cold, or unreachable.
 5. Latency + cost table: per turn, per interview, and for the eval suite run.
-6. States the "using open models on sponsor infra" angle as a judging narrative — it is a differentiator, but only if it genuinely works. Do not adopt it if it makes the demo fragile; say which you chose and why.
+6. States the "using open models" angle as a judging narrative — a differentiator, but only if it genuinely works. Do not adopt it if it makes the demo fragile; say which you chose and why.
+
+### 4b. Breeth — where an agent memory layer does and does not belong
+
+Given free Pro access, decide honestly rather than adopting it for the sponsor mention.
+
+- **Runtime cross-session memory is explicitly out of scope** ("long-term conversation history"). Do not add it to the product for its own sake.
+- **Note the overlap before building anything.** Breeth's `cognitive_pattern` is the same idea as this project's candidate *posture* (`fast-grasp` / `steady` / `persistent-grinder`), and its `why_connected` is the same idea as the planner's per-question `reason`. Both are already derived deterministically from the candidate record in ~40 lines with no network call. Replacing working local logic with a hosted dependency adds a demo failure mode and puts candidate data in a third-party store — say so plainly if you decline.
+- **Where it could genuinely earn a place:** memory *about the interviewer*, not the candidate — e.g. which question framings discriminate well across many interviews, decaying as they stop working. That is a real use of confidence decay and retraction, and it is not conversation history. Treat it as optional and additive; it must never sit on the critical path of a live demo.
+- **Dev-time use is uncontroversial:** as an MCP server giving the coding assistant memory across sessions. Log it in the AI usage log as tooling, exactly as with any other assistant tool.
+- The onboarding card says to claim access and *"run one test write before kickoff — setup time is not build time."* Do that early regardless of the adoption decision.
 
 **Secrets:** API keys never enter the repo. Specify `.env` + `.env.example` + platform env vars, and a pre-commit or CI check for leaked keys. The repo is public — a committed key is both a security incident and a Stage 1 problem.
 

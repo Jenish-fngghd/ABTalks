@@ -117,11 +117,21 @@ def main() -> int:
     results: dict[str, float] = {}
 
     # 1. Every candidate must produce a compliant plan. Pure logic, no model calls.
+    bridged = 0
     for c in candidates:
         plan = build_plan(c)
         assert len(plan) >= MIN_QUESTIONS, f"{c['member']['id']} plan too short"
         assert len({p.day for p in plan}) >= MIN_DAYS, f"{c['member']['id']} plan too narrow"
+        for q in plan:
+            # A bridged question must ask about a day strictly later than the gap
+            # it probes, or the prerequisite reasoning is backwards.
+            if q.gap_day is not None:
+                assert q.day > q.gap_day, f"{c['member']['id']} bridges backwards"
+        bridged += any(q.gap_day is not None for q in plan)
     print(f"[ok]   plan coverage floor holds for all {len(candidates)} candidates")
+    # Reported, not asserted: this is how much the curriculum graph actually earns
+    # its place. If it ever drops to zero, delete the graph rather than keep it.
+    print(f"[ok]   curriculum graph redirects a question for {bridged}/{len(candidates)} candidates")
 
     # 2. Full interviews, one per persona.
     subject = candidates[0]

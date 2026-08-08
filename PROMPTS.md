@@ -227,9 +227,77 @@ upgrading to `next@16.3.0` cleared all of them (`npm audit`: 0 vulnerabilities).
    `APIConnectionError` from the NIM endpoint. Transient connection errors, timeouts, and
    5xx now fall back too.
 
-**Confirmed working against a live model** (`gpt-oss-120b`, CAND-006, persistent-grinder):
+**Confirmed working against a live model 1** (`gpt-oss-120b`, CAND-006, persistent-grinder):
 bluff answer scored `correctness 1, depth 1, specificity 0, terminology 4` and was flagged,
 triggering a demand for concrete parameters; the strong answer scored `5/4/5/5`; the
 injection attempt scored straight zeros and the interview continued to all 8 questions
 across 8 days. The generated feedback listed exactly one strength, because only one answer
 had earned one.
+
+---
+
+### [7] 2026-08-08 — Breeth correction, prior-art review, and making the graph load-bearing
+**Author:** Yash · **Tool:** Claude Code (Opus 5)
+
+**Prompt (verbatim):**
+> now can you tell me where you have used the breeth [screenshot of Breeth Pro access card]
+> they have provided us with this and after that i want you below open source projects that
+> i have found, can you check if they are relevant to us in anyway and provide better
+> mechanism or methodology and after that can you tell where are you logging all this like i
+> have told you for gragh engineering or graphify and many more have you used them or not
+> and if not why
+
+**Correction — Breeth was misidentified.** Entry [2] recorded the sponsor account as
+"breeth" and §4 of `RESEARCH_PROMPT.md` described it as a GPU inference platform serving
+open-weight models. That was inferred from the name and it was wrong. Breeth
+(<https://www.thebreeth.com/>) is an **intent-aware memory layer for AI agents**: a graph of
+entities and edges where each fact carries `cognitive_pattern`, `why_connected`, and
+`director_vision`, with confidence decay and retraction, reachable over MCP or REST. It is
+not a model provider. §4 now records the correction rather than quietly editing it, and a
+new §4b covers where an agent memory layer does and does not belong here.
+
+**Breeth adoption decision: not in the product runtime.** Two reasons, both concrete.
+Cross-session memory is explicitly out of scope for this problem statement. And the overlap
+is already built: Breeth's `cognitive_pattern` is the same idea as this project's candidate
+*posture* (`fast-grasp` / `steady` / `persistent-grinder`), and `why_connected` is the same
+idea as `PlannedQuestion.reason` — both derived deterministically from the candidate record
+in about 40 lines, with no network call and no candidate data leaving the process.
+Replacing working local logic with a hosted dependency would add a live-demo failure mode.
+Dev-time use as an MCP memory server for the coding assistant remains uncontroversial.
+
+**Prior art reviewed** (all three suggested; none supplied a better mechanism for the core
+problem, and no code was copied from any of them):
+
+| Project | License / stars | Verdict |
+|---|---|---|
+| [IliaLarchenko/Interviewer](https://github.com/IliaLarchenko/Interviewer) | Apache-2.0, 119★ | Env-var LLM abstraction (`LLM_TYPE`/`LLM_URL`/`LLM_NAME`) is the same approach already used here (`LLM_BASE_URL`/`LLM_MODEL`). Confirms the design; nothing to take. |
+| [yizucodes/interview-agent](https://github.com/yizucodes/interview-agent) | Educational-use only, 9★ | Closest conceptual blueprint, but its RAG (ChromaDB, 1000/200 chunking) exists because project docs are unbounded — our curriculum is 4.4k tokens and fits in the prompt, so adopting it would be strictly worse. Its vague-answer challenge is delegated to model judgement; ours is a measured four-axis rule with a gap threshold. **Licence is not permissive — code could not be reused regardless.** |
+| [FoloUp](https://github.com/FoloUp/FoloUp) | MIT, 1.2k★ | Next.js + Tailwind + shadcn + Supabase. Question generation is a single "LLM reads the job description" call with no coverage guarantee. Its one genuinely better idea is **persistence** (Postgres-backed sessions) against our in-memory store — logged as a known limitation rather than adopted, since the problem statement puts persistent accounts out of scope. |
+
+The common gap across all three: every one generates questions from a source document with
+an LLM call. None guarantees topic coverage, and none separates terminology from
+specificity, so none can distinguish a fluent answer from a substantive one.
+
+**Graph engineering — a promise that had not been kept.** `RESEARCH_PROMPT.md` §3d required
+deciding the curriculum graph "with a number", and that test had never been run. Auditing
+it: `downstream()` was used in exactly one place, decorating the `reason` string, with zero
+effect on question selection, and `blocked_by()` / `module_title()` were dead code — a
+violation of this project's own no-dead-code rule.
+
+Fixed by making the graph decide something. A skipped day is now interrogated **through the
+nearest later day the candidate actually completed**, because asking someone to explain a
+day they were absent for only confirms they were absent. Dead code deleted.
+
+**The number §3d asked for: the graph redirects a question for 11 of 20 candidates
+(15 of 160 questions).** It is now reported by `run_eval` on every run, with the standing
+instruction that if it ever reaches zero the graph should be deleted rather than kept.
+
+Verified live: for CAND-011 (skipped Day 7, Embeddings) the agent asked *"how you integrated
+the retrieval system with the conversation memory in your final healthcare chatbot demo"* —
+a Day 31 question that cannot be answered well without Day 7, and which never mentions the
+skip. Known limitation: 5 of the 15 bridges land on Day 31, because the capstone is the
+catch-all downstream day when a candidate's record is sparse.
+
+**Graphify: still not used**, decision unchanged from entry [3] — it is a dev-time code
+knowledge graph, and this repo is 40 files. Recorded here so the "not used, and why" is
+explicit rather than implied.

@@ -50,26 +50,18 @@ def module_num(num: int) -> int:
     return module_of_day()[num]["n"]
 
 
-def module_title(n: int) -> str:
-    return next(m["title"] for m in curriculum()["modules"] if m["n"] == n)
-
-
 def all_days() -> list[int]:
     return sorted(days_by_num())
 
 
 def downstream(num: int) -> list[int]:
-    """Days that build on `num`: the rest of its module, plus all later modules.
+    """Days that build on `num`, nearest first.
 
-    Used to explain why a skipped day matters ("you skipped 29, but 30 and 31
-    assume it"). Coarse by construction -- see module docstring.
+    Ordering is the whole graph: the cohort is a linear syllabus, so anything
+    later assumes anything earlier. Nearest-first matters because the day right
+    after a gap is where the gap actually shows.
     """
     return [d for d in all_days() if d > num]
-
-
-def blocked_by(num: int) -> list[int]:
-    """Days `num` assumes: earlier days, nearest first."""
-    return [d for d in all_days() if d < num][::-1]
 
 
 def brief(num: int) -> str:

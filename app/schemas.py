@@ -56,6 +56,11 @@ class PlannedQuestion(BaseModel):
     difficulty: Difficulty
     reason: str  # human-readable; surfaced in `meta` so the plan is inspectable
     priority: float
+    # Set when this question probes a *skipped* day indirectly, by asking about a
+    # later day that depends on it. You cannot ask someone to explain a day they
+    # never did; you can ask about the day that assumes it and watch the seam.
+    gap_day: int | None = None
+    gap_topic: str | None = None
 
 
 class Assessment(BaseModel):
