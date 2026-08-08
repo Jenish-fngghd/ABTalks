@@ -74,13 +74,27 @@ Layered on top is the candidate's **posture**, computed from
 Every planned question carries a plain-English `reason`, returned in the API response and
 rendered in the UI. The plan is inspectable, not a black box.
 
-## Detecting bluffing
+## Scoring: what you know, and how you said it
 
-Answers are scored on four **independent** axes: `correctness`, `depth`, `specificity`,
-and `terminology`. Terminology is deliberately separate — high terminology with low
-specificity is fluent-sounding vocabulary with nothing underneath. When the agent sees
-that pattern it refuses to advance and demands one concrete example, number, or trade-off
-from the candidate's own build.
+The brief's own framing is that graduates *"should be able to confidently explain the
+systems they built"* and that *"effectively communicating this knowledge remains one of the
+biggest challenges."* So answers are scored on five axes in two groups:
+
+| What you know | How you said it |
+|---|---|
+| `correctness` · `depth` · `specificity` | `terminology` · `communication` |
+
+They catch opposite failures:
+
+- **Bluffing** — high terminology, low specificity. Fluent vocabulary, nothing underneath.
+  The agent refuses to advance and demands a concrete number or trade-off.
+- **Underselling** — high knowledge, low communication. They know it and are losing credit
+  for it. The more useful finding, because it is fixable before the next real interview.
+
+The axes are kept independent by making the model **extract before it scores**: it must
+first list the technical claims with the filler stripped out, then score knowledge from
+that list alone. Without this step a rambling answer containing the right facts scored
+identically to a confidently wrong one — see [DESIGN.md §7.5](DESIGN.md) for the numbers.
 
 ## Decisions, and what they cost
 

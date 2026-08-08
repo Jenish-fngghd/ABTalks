@@ -13,7 +13,14 @@ export type PlannedQuestion = {
 
 export type Meta = {
   dimensions: Record<string, number>;
-  perDay: { day: number; title: string; score: number; bluffing: boolean }[];
+  perDay: {
+    day: number;
+    title: string;
+    score: number;
+    bluffing: boolean;
+    undersells: boolean;
+  }[];
+  topicsNotAssessed: { topic: string; days: number[] }[];
   questionsAsked: number;
   questionsPlanned: number;
   daysCovered: number[];

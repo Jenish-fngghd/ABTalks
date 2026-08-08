@@ -219,7 +219,20 @@ def main() -> int:
     else:
         print("[ok]   concurrent turn on one session is refused")
 
-    # 5. The scorer must actually discriminate, or the feedback is decoration.
+    # 5. Every headline cohort topic the interview did not reach must be reported,
+    #    so a candidate can tell "not asked" from "answered badly".
+    covered = set(longest.days_covered)
+    expected = {
+        name for name, days in cur.HEADLINE_TOPICS.items() if not covered & set(days)
+    }
+    reported = {t["topic"] for t in longest.topics_not_assessed()}
+    if reported != expected:
+        print(f"[FAIL] unassessed topics misreported: {reported} vs {expected}")
+        failures += 1
+    else:
+        print(f"[ok]   {len(reported)} unassessed cohort topics reported, not hidden")
+
+    # 6. The scorer must actually discriminate, or the feedback is decoration.
     if results["strong"] <= results["weak"]:
         print(f"[FAIL] strong ({results['strong']}) did not outscore weak ({results['weak']})")
         failures += 1

@@ -70,18 +70,45 @@ class PlannedQuestion(BaseModel):
 
 
 class Assessment(BaseModel):
-    """Per-answer scoring. `terminology` high + `specificity` low == bluffing."""
+    """Per-answer scoring, on two groups of axes.
 
+    Knowledge -- correctness, depth, specificity -- is what they understand.
+    `terminology` is tracked apart from those because vocabulary without substance
+    is bluffing rather than knowledge.
+
+    `communication` is the fifth axis and belongs to neither group. The brief's own
+    framing is that graduates "should be able to confidently explain the systems
+    they built" and that "effectively communicating this knowledge remains one of
+    the biggest challenges" -- so an interviewer that only scores what a candidate
+    knows measures the wrong half of the stated problem. Someone can understand
+    retrieval perfectly and still lose an interview by rambling.
+    """
+
+    # Filled before any score. Forcing the technical claims to be written out first
+    # stops delivery from bleeding into the knowledge scores: a model that has just
+    # listed "800-token chunks, 120 overlap, section bleed" cannot then rate
+    # specificity 1 because the sentence around those facts was a mess. Measured --
+    # without this field a rambling answer scored identically to a factually wrong
+    # one, which is precisely the distinction this product exists to make.
+    claims: list[str] = []
     correctness: int = Field(ge=0, le=5)
     depth: int = Field(ge=0, le=5)
     specificity: int = Field(ge=0, le=5)
     terminology: int = Field(ge=0, le=5)
+    communication: int = Field(default=3, ge=0, le=5)
     notes: str = ""
     missing: list[str] = []
 
     @property
     def score(self) -> float:
+        """Knowledge score. Communication is reported separately and never
+        inflates or masks what the candidate actually knows."""
         return (self.correctness + self.depth + self.specificity) / 3
+
+    @property
+    def undersells(self) -> bool:
+        """Knows it, explains it badly -- the exact person this product is for."""
+        return self.score >= 3 and self.communication <= 2
 
     @property
     def bluffing(self) -> bool:

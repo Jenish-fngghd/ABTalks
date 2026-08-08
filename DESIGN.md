@@ -29,7 +29,16 @@ an interview agent can do.
 
 ### 2.1 What is actually being graded
 
-Not the questions. **The judgement.** A list of thirty good questions about RAG is a
+Not the questions. **The judgement.**
+
+And behind that, one line in the brief's Situation section sets the actual purpose:
+graduates *"should be able to confidently explain the systems they built"*, yet
+*"effectively communicating this knowledge remains one of the biggest challenges."* The
+product is interview **preparation**, not examination. An agent that only scores what a
+candidate knows measures the wrong half of the stated problem — someone can understand
+retrieval perfectly and still lose the interview by burying the point. That is why
+scoring carries a fifth axis, `communication`, reported beside knowledge and never
+averaged into it (§7.5). A list of thirty good questions about RAG is a
 worksheet; anyone can generate it in one prompt. What distinguishes an interviewer is what
 happens *after* the answer: recognising that "we implemented a production-grade RAG pipeline
 with optimized embedding retrieval" contains no information, and asking for the chunk size.
@@ -375,8 +384,33 @@ against a 6000 budget.
 
 ### 7.5 Scoring and feedback
 
-Four independent 0–5 axes — `correctness`, `depth`, `specificity`, `terminology` — validated
-by Pydantic, one retry with the JSON Schema attached on failure.
+Five 0–5 axes in two groups, validated by Pydantic with one retry on failure.
+
+| Group | Axes | Reports |
+|---|---|---|
+| What you know | `correctness`, `depth`, `specificity` | The headline score |
+| How you said it | `terminology`, `communication` | Reported beside it, never averaged in |
+
+The two groups catch opposite failures. **High terminology + low specificity is
+bluffing** — vocabulary with nothing underneath. **High knowledge + low communication is
+underselling** — and that is the more useful finding, because it is fixable before the
+next real interview.
+
+**Extract before scoring, or the axes contaminate each other.** Measured: with the axes
+scored directly, a rambling answer containing the right facts scored `1/1/1` — *identical
+to a confidently wrong answer*. Delivery was dragging knowledge down, collapsing exactly
+the distinction the fifth axis exists to make. The fix is a `claims` field the model must
+fill first, listing each technical claim stripped of filler, after which the knowledge
+axes are scored **from that list alone**. Verified live:
+
+| Answer | claims extracted | knowledge | communication |
+|---|---|---|---|
+| Clear and correct | chunk 800, overlap 120, section bleed → precision drop | 3.3 | 4 |
+| Same facts, rambling | chunking performed, overlap ~120, sections mixed | 1.7 | 1 |
+| Confident but wrong | embeddings are compression, 4096 dims = lossless | 0.3 | 2 |
+| Precise facts, bad delivery | overlap 120, 1200 caused drop, 0.82 → 0.61, settled 800 | **3.7** | **2** → `undersells` |
+
+The last row is the population the brief describes, and the agent now identifies it.
 
 Hallucinated praise is prevented by instruction (*"only list a strength if the scores
 support it… say so plainly rather than inventing praise"*) and verified by behaviour: a live

@@ -3,11 +3,17 @@
 import { motion } from "motion/react";
 import type { Feedback, Meta } from "@/lib/api";
 
-const AXES: { key: string; label: string; note: string }[] = [
-  { key: "correctness", label: "Correctness", note: "Was it technically true?" },
-  { key: "depth", label: "Depth", note: "Mechanism, or restated definition?" },
-  { key: "specificity", label: "Specificity", note: "Real systems, numbers, decisions?" },
-  { key: "terminology", label: "Terminology", note: "Fluency with the vocabulary" },
+const AXES: { key: string; label: string; note: string; group: string }[] = [
+  { key: "correctness", label: "Correctness", note: "Was it technically true?", group: "What you know" },
+  { key: "depth", label: "Depth", note: "Mechanism, or restated definition?", group: "What you know" },
+  { key: "specificity", label: "Specificity", note: "Real systems, numbers, decisions?", group: "What you know" },
+  { key: "terminology", label: "Terminology", note: "Fluency with the vocabulary", group: "How you said it" },
+  {
+    key: "communication",
+    label: "Communication",
+    note: "Would this land in a real interview?",
+    group: "How you said it",
+  },
 ];
 
 function tone(score: number) {
@@ -28,12 +34,20 @@ export function Report({
   onRestart: () => void;
 }) {
   const axes = AXES.filter((a) => meta.dimensions?.[a.key] !== undefined);
-  const overall = axes.length
-    ? axes.reduce((sum, a) => sum + meta.dimensions[a.key], 0) / axes.length
+  // Headline is knowledge only. Communication is reported beside it, never averaged
+  // into it -- they are different problems with different fixes.
+  const knowledge = ["correctness", "depth", "specificity"].filter(
+    (k) => meta.dimensions?.[k] !== undefined,
+  );
+  const overall = knowledge.length
+    ? knowledge.reduce((sum, k) => sum + meta.dimensions[k], 0) / knowledge.length
     : 0;
+  const comms = meta.dimensions?.communication;
 
-  // The gap that matters: fluent vocabulary with nothing concrete underneath.
+  // Fluent vocabulary with nothing concrete underneath.
   const bluffGap = (meta.dimensions?.terminology ?? 0) - (meta.dimensions?.specificity ?? 0);
+  // The opposite, and the more fixable one: knows it, explains it badly.
+  const undersold = overall >= 3 && comms !== undefined && comms <= 2;
 
   return (
     <main className="mx-auto max-w-3xl px-5 py-12 sm:px-8 sm:py-16">
@@ -67,14 +81,25 @@ export function Report({
           >
             {overall.toFixed(1)}
           </motion.span>
-          <span className="mono pb-1.5 text-sm text-faint">/ 5.0</span>
+          <span className="mono pb-1.5 text-sm text-faint">/ 5.0 knowledge</span>
+          {comms !== undefined && (
+            <span className="mono pb-1.5 text-sm text-muted">
+              · {comms.toFixed(1)} communication
+            </span>
+          )}
         </div>
 
         <div className="mt-7 flex flex-col gap-5">
           {axes.map((axis, i) => {
             const score = meta.dimensions[axis.key];
+            const startsGroup = i === 0 || axes[i - 1].group !== axis.group;
             return (
               <div key={axis.key}>
+                {startsGroup && (
+                  <p className="mono mb-2 text-[10px] uppercase tracking-[0.16em] text-faint">
+                    {axis.group}
+                  </p>
+                )}
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="text-[14px] font-medium">{axis.label}</span>
                   <span className="mono text-[13px] tabular-nums" style={{ color: tone(score) }}>
@@ -113,6 +138,20 @@ export function Report({
             detail behind them often was not.
           </motion.p>
         )}
+
+        {undersold && (
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.7 }}
+            className="mt-6 rounded-xl border border-line bg-panel-2 px-4 py-3 text-[13px] leading-relaxed text-muted"
+          >
+            <strong className="text-accent">You know more than you showed.</strong> Knowledge
+            scored {overall.toFixed(1)} against communication {comms?.toFixed(1)} — the
+            engineering is there and the delivery is costing you credit for it. That is the
+            most fixable gap on this page.
+          </motion.p>
+        )}
       </motion.section>
 
       <Section title="Summary" delay={0.16}>
@@ -143,6 +182,11 @@ export function Report({
                     bluff
                   </span>
                 )}
+                {d.undersells && (
+                  <span className="mono shrink-0 rounded border border-line px-1.5 py-0.5 text-[10px] uppercase text-accent">
+                    undersold
+                  </span>
+                )}
                 <div className="h-1.5 w-24 shrink-0 overflow-hidden rounded-full bg-line">
                   <motion.div
                     className="h-full rounded-full"
@@ -156,6 +200,30 @@ export function Report({
                   {d.score.toFixed(1)}
                 </span>
               </motion.li>
+            ))}
+          </ul>
+        </Section>
+      )}
+
+      {meta.topicsNotAssessed?.length > 0 && (
+        <Section title="Not assessed" delay={0.46}>
+          {/* Stated rather than left silent: a candidate should know whether they did
+              badly at MCP or were simply never asked about it. */}
+          <p className="mb-3 text-[13px] leading-relaxed text-muted">
+            This interview followed your cohort record, so these topics never came up. They
+            were not assessed — not assessed badly.
+          </p>
+          <ul className="flex flex-wrap gap-2">
+            {meta.topicsNotAssessed.map((t) => (
+              <li
+                key={t.topic}
+                className="rounded-md border border-line bg-panel px-2.5 py-1 text-[12px] text-muted"
+              >
+                {t.topic}
+                <span className="mono ml-1.5 text-[10px] text-faint">
+                  day{t.days.length > 1 ? "s" : ""} {t.days.join(", ")}
+                </span>
+              </li>
             ))}
           </ul>
         </Section>

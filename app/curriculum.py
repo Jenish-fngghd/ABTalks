@@ -102,6 +102,27 @@ def digest() -> str:
     return "\n".join(lines)
 
 
+# The headline topics the brief names when describing the cohort. An interview is
+# driven by the candidate's record, so it will not always reach all of these -- a
+# candidate with no Day 23 record gets no MCP question, correctly. Naming them lets
+# the report say what was *not* assessed and why, instead of leaving a silent gap.
+HEADLINE_TOPICS: dict[str, list[int]] = {
+    "Retrieval-Augmented Generation": [10, 11],
+    "Vector Databases": [8, 9],
+    "Prompt Engineering": [12, 13],
+    "Agentic AI": [21, 22, 24],
+    "Model Context Protocol": [23],
+    "AI Deployment": [28, 30],
+    "Production AI Systems": [29, 31],
+}
+
+
+def topics_missed(covered: list[int]) -> list[tuple[str, list[int]]]:
+    """Headline topics no question touched, with the days that would have covered them."""
+    seen = set(covered)
+    return [(name, days) for name, days in HEADLINE_TOPICS.items() if not seen & set(days)]
+
+
 def brief(num: int) -> str:
     """Compact one-day summary for the prompt. Keeps token cost predictable."""
     d = day(num)

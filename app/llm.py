@@ -190,6 +190,8 @@ def _offline(user: str, model_cls: type[T]) -> T:
             depth=min(5, words // 25),
             specificity=min(5, concrete),
             terminology=min(5, jargon),
+            # Crude proxy: very short or very long answers communicate worst.
+            communication=1 if words < 8 or words > 120 else 3,
             notes="offline scorer: no model configured",
             missing=["set LLM_API_KEY for real scoring"],
         )
