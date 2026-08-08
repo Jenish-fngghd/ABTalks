@@ -190,10 +190,16 @@ def _offline(user: str, model_cls: type[T]) -> T:
             reply="[offline mode] Walk me through a concrete example from your build.",
         )
     if model_cls is Feedback:
+        # Cite the days actually covered. The stand-in has to be structurally
+        # representative or the eval's "feedback references real curriculum days"
+        # assertion tests the stub instead of the product.
+        days = sorted({int(d) for d in re.findall(r"^Day (\d+) \(", user, re.M)})[:4]
         return model_cls(  # type: ignore[return-value]
             summary="[offline mode] No model configured; scores are heuristic.",
             strengths=["Completed the interview"],
-            gaps=["Real evaluation requires LLM_API_KEY"],
-            next=["Configure a provider in .env"],
+            gaps=[f"Day {d}: not assessed, no model configured" for d in days]
+            or ["Real evaluation requires LLM_API_KEY"],
+            next=[f"Day {d}: re-run with a provider configured" for d in days]
+            or ["Configure a provider in .env"],
         )
     raise RuntimeError(f"no offline stand-in for {model_cls.__name__}")

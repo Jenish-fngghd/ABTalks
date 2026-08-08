@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
+import threading
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -21,8 +23,9 @@ load_dotenv()
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from app import curriculum as cur  # noqa: E402
 from app import llm  # noqa: E402
-from app.interviewer import MAX_TURNS, Session  # noqa: E402
+from app.interviewer import MAX_TURNS, TRANSCRIPT_CHAR_BUDGET, Session  # noqa: E402
 from app.planner import MIN_DAYS, MIN_QUESTIONS, build_plan  # noqa: E402
 
 DATA = Path(__file__).resolve().parent.parent / "data"
@@ -88,6 +91,25 @@ def check(session: Session, persona: str) -> list[str]:
         for field in ("strengths", "gaps", "next"):
             if not getattr(fb, field):
                 fails.append(f"feedback.{field} is empty")
+    # §5.7: follow-up rate. A weak or bluffing candidate must draw at least one
+    # probe -- an interviewer that never follows up is a questionnaire.
+    followups = sum(1 for t in session.turns if t.is_followup)
+    if persona in ("weak", "bluffer", "silent") and followups == 0:
+        fails.append(f"no follow-up asked for the {persona} persona")
+    # ...and a strong candidate should not be interrogated on every single answer.
+    if persona == "strong" and followups > session.questions_asked:
+        fails.append(f"strong persona drew {followups} follow-ups for {session.questions_asked} questions")
+
+    # §5.7: feedback must reference real curriculum days, not invented ones.
+    if fb is not None:
+        valid = set(cur.all_days())
+        cited = {int(n) for text in fb.gaps + fb.next for n in re.findall(r"\bDay (\d+)", text)}
+        invented = cited - valid
+        if invented:
+            fails.append(f"feedback cites days outside the curriculum: {sorted(invented)}")
+        if not cited and persona != "silent":
+            fails.append("feedback cites no curriculum day at all")
+
     if persona == "adversarial":
         # The injection asks for straight 5s and an early exit. Neither may happen.
         perfect = [t for t in session.turns if t.assessment and t.assessment.score == 5]
@@ -148,7 +170,32 @@ def main() -> int:
             print(f"         - {f}")
         failures += len(fails)
 
-    # 3. The scorer must actually discriminate, or the feedback is decoration.
+    # 3. Context budget: the transcript must stay bounded across a full interview.
+    longest = run(subject, PERSONAS["strong"])
+    size = len(longest._transcript())
+    if size > TRANSCRIPT_CHAR_BUDGET * 1.5:
+        print(f"[FAIL] transcript grew to {size} chars, past the {TRANSCRIPT_CHAR_BUDGET} budget")
+        failures += 1
+    else:
+        print(f"[ok]   transcript bounded at {size} chars (budget {TRANSCRIPT_CHAR_BUDGET})")
+
+    # 4. Two turns on one session must not interleave.
+    concurrent = Session(subject["member"]["id"] + "-race", subject)
+    concurrent.start()
+    concurrent.lock.acquire()
+    try:
+        second_got_in = concurrent.lock.acquire(blocking=False)
+    finally:
+        if second_got_in:
+            concurrent.lock.release()
+        concurrent.lock.release()
+    if second_got_in:
+        print("[FAIL] a second concurrent turn was admitted on one session")
+        failures += 1
+    else:
+        print("[ok]   concurrent turn on one session is refused")
+
+    # 5. The scorer must actually discriminate, or the feedback is decoration.
     if results["strong"] <= results["weak"]:
         print(f"[FAIL] strong ({results['strong']}) did not outscore weak ({results['weak']})")
         failures += 1

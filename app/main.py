@@ -89,7 +89,16 @@ def interview(req: InterviewRequest) -> InterviewResponse:
             meta=session.meta(),
         )
 
-    reply, done = _guarded(session.answer, req.message or "")
+    # Non-blocking: a second in-flight request on the same session is a duplicate
+    # submit, not a queued turn. Queueing it would score the same answer twice.
+    if not session.lock.acquire(blocking=False):
+        raise HTTPException(
+            status_code=409, detail="A turn is already in progress for this session."
+        )
+    try:
+        reply, done = _guarded(session.answer, req.message or "")
+    finally:
+        session.lock.release()
     store.put(session)
     return InterviewResponse(
         reply=reply,

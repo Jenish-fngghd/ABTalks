@@ -1,0 +1,13 @@
+#!/bin/sh
+# Blocks a commit that would publish an API key.
+#
+# Install once:  git config core.hooksPath scripts
+#
+# The repo is public and PROMPTS.md quotes prompts verbatim, which is exactly
+# where a key gets pasted by accident.
+
+python scripts/check_secrets.py --staged || {
+    echo
+    echo "Commit blocked. Remove the key, then rotate it."
+    exit 1
+}

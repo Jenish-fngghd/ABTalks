@@ -64,6 +64,44 @@ def downstream(num: int) -> list[int]:
     return [d for d in all_days() if d > num]
 
 
+@lru_cache(maxsize=1)
+def digest() -> str:
+    """A compact index of all 31 days -- number, type, title -- plus the modules.
+
+    Sized by measurement, not preference. Three options were costed against the
+    200k tokens/day free-tier cap, assuming ~700 tokens of instructions and a
+    ~1.1k-token transcript by turn 8:
+
+        full curriculum text   ~5016 tok/turn ->  39 turns/day
+        this index + one day   ~2293 tok/turn ->  87 turns/day
+        one day only           ~1893 tok/turn -> 105 turns/day
+
+    The full text is ~2 interviews before the account is locked out, so it loses.
+    This index costs 400 tokens and buys the thing the planner actually needs the
+    model to know: that other days exist and in what order, so a question about
+    Day 31 can lean on Day 7 without Day 7 being pasted in.
+
+    UNVERIFIED: Groq documents automatic prefix caching at a 50% discount with
+    cached tokens exempt from rate limits, which would change these numbers a
+    lot. Responses from this account carry no `prompt_tokens_details.cached_tokens`
+    field, so no cache hit could be confirmed and none of it is assumed here.
+    https://console.groq.com/docs/prompt-caching
+
+    Must be byte-identical on every call so it can act as a stable prefix -- hence
+    lru_cache, and no per-session data interpolated into it.
+    """
+    lines = [f"CURRICULUM: {curriculum()['cohort']}", ""]
+    for mod in curriculum()["modules"]:
+        start, end = mod["days"]
+        lines.append(f"Module {mod['n']}: {mod['title']} (days {start}-{end})")
+    lines.append("")
+    lines.append("All days (full detail is supplied for the day under discussion):")
+    for num in all_days():
+        d = day(num)
+        lines.append(f"  Day {num} ({d['type']}): {d['title']}")
+    return "\n".join(lines)
+
+
 def brief(num: int) -> str:
     """Compact one-day summary for the prompt. Keeps token cost predictable."""
     d = day(num)
