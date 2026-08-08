@@ -21,6 +21,11 @@ from app.planner import build_plan
 from app.schemas import Assessment, Feedback, PlannedQuestion, Turn, TurnResult
 
 MAX_FOLLOWUPS_PER_SLOT = 2
+# A clarification is not an answer, so it does not consume a plan slot. Budgeted per
+# session rather than per question: a real candidate asks for clarification once or
+# twice in an interview, not on every question, and a per-slot allowance would let
+# someone who only ever asks questions back run the session to its hard turn cap.
+MAX_CLARIFICATIONS_PER_SESSION = 3
 MAX_TURNS = 20  # hard stop; a candidate cannot keep the session open forever
 ANSWER_CHAR_LIMIT = 6000
 
@@ -96,9 +101,15 @@ where your values go -- do not copy it, and do not treat it as a scoring hint:
     "notes": "<one sentence on what the answer did and did not establish>",
     "missing": ["<a specific point they did not cover>"]
   },
+  "intent": "<answer, clarify, or concede>",
   "action": "<followup or advance>",
   "reply": "<the single line you say to the candidate next>"
 }
+
+`intent` describes what the candidate just did:
+  answer  - they attempted the question, however well or badly
+  clarify - they asked you something back, or said your question was ambiguous
+  concede - they said plainly that they do not know or do not remember
 
 Score each axis on its own merits across the full 0-5 range. Use 5 when the answer
 fully earns it and 0 when nothing was established."""
@@ -119,6 +130,7 @@ class Session:
         self.turns: list[Turn] = []
         self.slot = 0
         self.followups = 0
+        self.clarifications = 0
         self.done = False
         self.feedback: Feedback | None = None
 
@@ -251,6 +263,12 @@ class Session:
     @staticmethod
     def _gap_framing(q: PlannedQuestion) -> str:
         """Extra instruction when a question exists to expose a skipped prerequisite."""
+        if q.unrecorded:
+            return (
+                f"\nTheir record says nothing either way about Day {q.day}. Open by "
+                f"asking whether they got to it, and follow their answer -- do not "
+                f"assume they did the work, and do not imply they skipped it."
+            )
         if q.gap_day is None:
             return ""
         return (
@@ -314,9 +332,35 @@ class Session:
         )
 
         result = structured(system_prompt(), prompt, TurnResult)
+
+        # A clarifying question is not an attempt, so it is not scored and does not
+        # consume the slot. Repeating the question at someone who asked what it
+        # meant is the most obviously robotic thing an interviewer can do.
+        if (
+            result.intent == "clarify"
+            and self.clarifications < MAX_CLARIFICATIONS_PER_SESSION
+            # Clarifications are cheap but not free: they must still count against the
+            # hard turn cap, or a candidate who only ever asks questions back keeps the
+            # session open indefinitely.
+            and len(self.turns) < MAX_TURNS - 1
+        ):
+            self.clarifications += 1
+            current.answer = ""  # unanswered; the question still stands
+            self.turns.append(
+                Turn(slot=self.slot, day=q.day, question=result.reply, is_followup=True)
+            )
+            return result.reply, False
+
         current.assessment = result.assessment
 
-        advance = forced_advance or result.action == "advance" or next_q is None
+        # Someone who plainly says they do not know has told us what we needed to
+        # learn. Pressing them a second time yields nothing and reads as tone-deaf.
+        # The instruction above already tells the model to advance on a concession, so
+        # this is a backstop rather than the primary path -- it keeps the state machine
+        # correct if the model probes anyway, at the cost of a reply that reads as one
+        # more question. Trust the model's own choice when it agrees.
+        conceded = result.intent == "concede"
+        advance = forced_advance or conceded or result.action == "advance" or next_q is None
         if advance and next_q is None:
             self.done = True
             self.feedback = self._report()
@@ -368,10 +412,19 @@ class Session:
                 + self._gap_framing(next_q)
             )
         return (
-            'Decide: "followup" if the answer was vague, wrong, or fluent-but-hollow '
-            "(high terminology, low specificity) and one more probe would resolve it -- "
-            'then `reply` is that probe. Otherwise "advance" -- then `reply` acknowledges '
-            f"briefly and asks about Day {next_q.day}, {next_q.topic}.\n"
+            "First classify what they just did, then let that decide the rest.\n"
+            '- If they asked you something back, intent is "clarify": answer their '
+            "question directly in one sentence and restate yours more precisely. Do not "
+            "bounce the question back at them, and do not move on.\n"
+            '- If they plainly said they do not know or do not remember, intent is '
+            '"concede": set action to "advance", acknowledge it in a few words without '
+            f"labouring it, and ask about Day {next_q.day}, {next_q.topic}. Do not press "
+            "them again on the topic they just conceded.\n"
+            '- Otherwise intent is "answer". Choose "followup" if it was vague, wrong, or '
+            "fluent-but-hollow (high terminology, low specificity) and one more probe "
+            'would resolve it -- then `reply` is that probe. Choose "advance" otherwise, '
+            f"and `reply` acknowledges briefly then asks about Day {next_q.day}, "
+            f"{next_q.topic}.\n"
             f"Why this day: {next_q.reason}\n"
             f"Intent: {next_q.intent}. Difficulty: {self.difficulty()}."
             + self._gap_framing(next_q)

@@ -176,6 +176,15 @@ def _offline(user: str, model_cls: type[T]) -> T:
     jargon = len(_JARGON.findall(answer))
 
     if model_cls is TurnResult:
+        # The stand-in must classify intent too, or the eval's clarify/concede
+        # personas silently exercise the plain-answer path and prove nothing.
+        low = answer.lower()
+        if "?" in answer and len(answer.split()) < 30:
+            intent = "clarify"
+        elif re.search(r"do not (know|remember)|don't (know|remember)|no idea", low):
+            intent = "concede"
+        else:
+            intent = "answer"
         a = Assessment(
             correctness=min(5, jargon),
             depth=min(5, words // 25),
@@ -185,8 +194,9 @@ def _offline(user: str, model_cls: type[T]) -> T:
             missing=["set LLM_API_KEY for real scoring"],
         )
         return model_cls(  # type: ignore[return-value]
+            intent=intent,
             assessment=a,
-            action="followup" if a.bluffing or a.score < 2 else "advance",
+            action="advance" if intent == "concede" or not (a.bluffing or a.score < 2) else "followup",
             reply="[offline mode] Walk me through a concrete example from your build.",
         )
     if model_cls is Feedback:

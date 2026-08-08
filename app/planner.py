@@ -10,6 +10,8 @@ The model never chooses the topics. It only phrases them and scores answers.
 
 from __future__ import annotations
 
+import logging
+
 from app import curriculum as cur
 from app.profile import Posture, day_signals, posture
 from app.schemas import DaySignal, PlannedQuestion
@@ -22,6 +24,8 @@ MAX_PER_DAY = 2
 # Days worth interrogating even with a clean record -- these carry the cohort's
 # actual engineering content rather than setup steps.
 HIGH_VALUE_TYPES = {"AI_CORE", "SHIP_IT", "CAPSTONE", "OPTIMIZE"}
+
+log = logging.getLogger("interview.planner")
 
 # status -> (base priority, interview intent, opening difficulty)
 BY_STATUS: dict[str, tuple[float, str, str]] = {
@@ -54,13 +58,25 @@ def _reason(sig: DaySignal, title: str) -> str:
             f"Passed Day {sig.day} ({title}) in {n} attempt{'s' if n != 1 else ''}. "
             "Claimed strength -- push past recall into trade-offs."
         )
-    return f"No record for Day {sig.day} ({title}). Establish baseline coverage."
+    return (
+        f"No record either way for Day {sig.day} ({title}) -- the mission list is a "
+        "sample, not a complete transcript. Ask whether they covered it before "
+        "assuming they did."
+    )
 
 
 def _priority(sig: DaySignal, post: Posture) -> float:
     base, _, _ = BY_STATUS[sig.status]
     d = cur.day(sig.day)
     score = base
+
+    # The brief is to assess "the concepts they have completed", so a day the
+    # record actually mentions always outranks one it does not. Without this a
+    # high-value unknown day (30 + 12 for SHIP_IT) outscored a mastered SETUP day
+    # (55 - 25), and four of twenty candidates were being asked about a day they
+    # have no record of while ten recorded days went unused.
+    if sig.status == "unknown":
+        return score - 100
 
     if d["type"] in HIGH_VALUE_TYPES:
         score += 12
@@ -148,35 +164,70 @@ def build_plan(candidate: dict, size: int = MIN_QUESTIONS) -> list[PlannedQuesti
                 priority=_priority(sig, post),
                 gap_day=gap_day,
                 gap_topic=gap_topic,
+                unrecorded=sig.status == "unknown",
             )
         )
         per_day[ask_day] = per_day.get(ask_day, 0) + 1
         modules.add(cur.module_num(ask_day))
 
-    # Pass 1: spread. One question per day, one day per module, highest priority
-    # first. This front-loads the diversity requirement so it cannot be missed.
-    for sig in scored:
+    # Days the record actually mentions are exhausted before any unrecorded day is
+    # considered: the brief is to assess "the concepts they have completed".
+    known = [s for s in scored if s.status != "unknown"]
+    unknown = [s for s in scored if s.status == "unknown"]
+
+    # Pass 1: breadth. One question per day, one day per module, highest priority
+    # first, so curriculum spread is secured before depth is spent.
+    for sig in known:
+        if len(plan) >= size:
+            break
+        if per_day.get(sig.day) or cur.module_num(sig.day) in modules:
+            continue
+        take(sig)
+
+    # Pass 2: remaining recorded days, one question each. A day deferred by the
+    # module rule above is reclaimed here rather than lost -- previously it was
+    # skipped outright and an unrecorded day took the slot instead.
+    for sig in known:
         if len(plan) >= size:
             break
         if per_day.get(sig.day):
             continue
-        if cur.module_num(sig.day) in modules and len(modules) < MIN_MODULES:
-            continue
         take(sig)
 
-    # Pass 2: fill remaining slots by priority, up to MAX_PER_DAY per day.
-    for sig in scored:
+    # Pass 3: depth. Second question on the highest-priority recorded days.
+    for sig in known:
         if len(plan) >= size:
             break
         if per_day.get(sig.day, 0) >= MAX_PER_DAY:
             continue
         take(sig)
 
+    # Pass 4: only if the record is too sparse to fill the plan. Marked so the
+    # interviewer asks whether they covered it instead of assuming they did.
+    for sig in unknown:
+        if len(plan) >= size:
+            break
+        if per_day.get(sig.day, 0) >= MAX_PER_DAY:
+            continue
+        take(sig)
+
+    # The floors that come from the brief -- >=8 questions across >=4 days -- are
+    # hard, and the curriculum always has 31 days to draw on, so failing them means
+    # a real bug rather than a thin candidate record.
     distinct_days = len({p.day for p in plan})
-    if len(plan) < size or distinct_days < MIN_DAYS or len(modules) < MIN_MODULES:
+    if len(plan) < size or distinct_days < MIN_DAYS:
         raise ValueError(
-            f"plan failed coverage floor: {len(plan)} questions, "
-            f"{distinct_days} days, {len(modules)} modules"
+            f"plan failed the required coverage floor: {len(plan)} questions "
+            f"across {distinct_days} days (need {size} and {MIN_DAYS})"
+        )
+    # Module spread is our own quality target, not a stated requirement. A record
+    # concentrated in two modules -- e.g. every recorded day skipped and bridged
+    # downstream -- is a legitimate profile, so this degrades rather than 500s.
+    if len(modules) < MIN_MODULES:
+        log.info(
+            "plan for a narrow record spans %d modules, below the %d target",
+            len(modules),
+            MIN_MODULES,
         )
 
     # Interview in curriculum order -- jumping around the syllabus reads as random.

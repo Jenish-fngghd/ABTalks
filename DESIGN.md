@@ -308,6 +308,16 @@ per-turn latency.
 `struggled` 90 > `skipped` 80 > `mastered` 55 > `unknown` 30, adjusted by day type
 (`AI_CORE`/`SHIP_IT` +12, `SETUP` −25) and by posture.
 
+**Recorded days are exhausted before any unrecorded day is considered.** The brief says to
+assess "the concepts they have completed", and an audit found 4 of 20 candidates being asked
+about a day their record never mentions — a high-value unknown day (30 + 12) outscored a
+mastered `SETUP` day (55 − 25), and a module-diversity rule was permanently discarding
+deferred days so an unrecorded one took the slot. The plan is now built in four explicit
+passes (breadth by module → remaining recorded days → depth → unrecorded only as last
+resort). **Result: 0 of 160 questions now target an unrecorded day**, asserted in
+`run_eval`. When the record genuinely is too thin, the question is marked `unrecorded` and
+the interviewer asks whether they got to it rather than assuming either way.
+
 Posture comes from `missionsFirstTry / missionsCompleted` — the strongest signal in this
 dataset (CAND-018 is 31/31; CAND-017 is 1/31):
 
@@ -377,6 +387,28 @@ Anti-gaming: candidate answers are delimited in `<candidate_answer>` tags and fr
 the system prompt refuses instructions arriving inside them. The adversarial persona in
 `run_eval` keeps it honest — verified 0/5 on every model benchmarked.
 
+### 7.5a Conversational intent — not every message is an answer
+
+An agent that treats every input as an attempted answer fails the brief's own test:
+*"resemble a real technical interview rather than a scripted questionnaire."* Two live
+failures made this concrete. A candidate asked *"do you mean the retrieval step or the
+embedding step?"* and the agent re-asked its original question verbatim. Another said
+*"honestly I don't remember"* and was pressed with a near-identical rephrasing.
+
+Each turn now classifies intent alongside the score:
+
+| Intent | Behaviour | Why |
+|---|---|---|
+| `answer` | Scored; follow-up or advance as before | The normal path |
+| `clarify` | **Not scored, slot not consumed.** Resolve the ambiguity in one sentence, restate the question | Repeating yourself at someone who asked what you meant is the most robotic thing an interviewer can do. Budgeted 3 per session — a real candidate clarifies once or twice, and a per-question allowance let a purely-clarifying candidate run the session to its turn cap |
+| `concede` | Scored, then advance without pressing | Someone who says they don't know has already told you what you needed to learn |
+
+Verified live: clarify now answers *"I meant the embedding step"* and stays on Day 7;
+concede answers *"Sure, let's move on. What did you do on Day 8?"* and the slot advances
+with it. The rule lives in the prompt so the model's spoken reply matches the state
+transition — an earlier code-only override advanced the slot while the model was still
+probing the old topic. Both are eval personas (`confused`, `honest`).
+
 ### 7.6 Failure modes
 
 | Failure | Mitigation | Verified by |
@@ -391,6 +423,12 @@ the system prompt refuses instructions arriving inside them. The adversarial per
 | Connection error / timeout / 5xx | Same fallback path | Added after a live interview died on `APIConnectionError` |
 | Concurrent turns, one session | Non-blocking lock → 409 | `run_eval` |
 | Transcript growth | Middle-elision budget | `run_eval` |
+| Candidate record cites a day outside the curriculum | Filtered at ingest | Was a `KeyError` reaching the endpoint |
+| Malformed profile (missions not a list, member null, string day, negative attempts) | Defensive coercion in `profile.py` | 10 malformed shapes, all produce a valid plan |
+| **Injection via the candidate profile**, not the answer | `name`/`jobRole` are length-capped, newline-flattened, and stripped of `<`, `>`, ` ``` ` so they cannot open a prompt section | Profile-injection case |
+| Record too narrow for 3 modules | Degrades with a log line; only the brief's own floors (≥8 questions, ≥4 days) raise | All-skipped profile |
+| Empty or 10KB `sessionId` | `min_length=1, max_length=200` on the request model | 12 malformed request shapes, no 500s |
+| Candidate only ever asks questions back | Clarification budget, and clarifications count toward the turn cap | `confused` persona |
 
 ### 7.7 Eval plan
 

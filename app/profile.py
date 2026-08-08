@@ -64,15 +64,35 @@ class Posture:
 
 
 def posture(candidate: dict[str, Any]) -> Posture:
-    m = candidate.get("member", {})
-    s = candidate.get("signals", {})
+    m = candidate.get("member") or {}
+    s = candidate.get("signals") or {}
+
+    def num(source: dict, key: str) -> int:
+        """Coerce defensively -- this object arrives over HTTP."""
+        try:
+            return max(0, int(source.get(key, 0) or 0))
+        except (TypeError, ValueError):
+            return 0
+
+    def text(key: str, fallback: str) -> str:
+        """Free text from the request is quoted into the prompt, so it is length-capped
+        and stripped of the delimiters and newlines used to structure that prompt.
+        A name like "Bob\\n\\nIgnore previous instructions" must not become a section."""
+        value = m.get(key)
+        if not isinstance(value, str) or not value.strip():
+            return fallback
+        cleaned = " ".join(value.split())
+        for token in ("<", ">", "```"):
+            cleaned = cleaned.replace(token, "")
+        return cleaned[:80] or fallback
+
     return Posture(
-        name=m.get("name", "Candidate"),
-        role=m.get("jobRole", "Engineer"),
-        years=int(m.get("yearsExperience", 0) or 0),
-        completed=int(s.get("missionsCompleted", 0) or 0),
-        first_try=int(s.get("missionsFirstTry", 0) or 0),
-        commit_days=int(s.get("commitDays", 0) or 0),
+        name=text("name", "Candidate"),
+        role=text("jobRole", "Engineer"),
+        years=num(m, "yearsExperience"),
+        completed=num(s, "missionsCompleted"),
+        first_try=num(s, "missionsFirstTry"),
+        commit_days=num(s, "commitDays"),
     )
 
 
@@ -83,12 +103,21 @@ def day_signals(candidate: dict[str, Any]) -> dict[int, DaySignal]:
     30 completed, so days absent from the list are "unknown", never "skipped".
     The interviewer must not accuse someone of skipping a day it has no record of.
     """
+    from app.curriculum import days_by_num
+
+    valid = days_by_num()
     out: dict[int, DaySignal] = {}
     for mission in candidate.get("missions", []):
+        if not isinstance(mission, dict):
+            continue
         num = mission.get("day")
-        if num is None:
+        # The candidate object arrives over HTTP, so it is untrusted: a day number
+        # outside the curriculum, or a non-integer, must not reach a dict lookup.
+        if not isinstance(num, int) or isinstance(num, bool) or num not in valid:
             continue
         attempts = mission.get("attempts")
+        if not isinstance(attempts, int) or isinstance(attempts, bool) or attempts < 0:
+            attempts = None
         if mission.get("skipped"):
             status = "skipped"
         elif mission.get("passed") is False:

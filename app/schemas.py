@@ -14,7 +14,9 @@ from pydantic import BaseModel, Field
 
 
 class InterviewRequest(BaseModel):
-    sessionId: str
+    # Bounded because it is a store key supplied by the client: an empty string is
+    # not a session, and a megabyte of it should not become one.
+    sessionId: str = Field(min_length=1, max_length=200)
     candidate: dict[str, Any] | None = None  # present only on the first request
     message: str | None = None  # present on every subsequent request
 
@@ -61,6 +63,10 @@ class PlannedQuestion(BaseModel):
     # never did; you can ask about the day that assumes it and watch the seam.
     gap_day: int | None = None
     gap_topic: str | None = None
+    # True when the candidate's record says nothing about this day. The question
+    # must then be asked tentatively -- the mission list is a sample, so silence
+    # means "unknown", never "skipped".
+    unrecorded: bool = False
 
 
 class Assessment(BaseModel):
@@ -90,8 +96,15 @@ class Assessment(BaseModel):
 
 
 class TurnResult(BaseModel):
-    """One model call: assess the answer, then speak the next line."""
+    """One model call: read what the candidate did, assess it, then speak.
 
+    `intent` exists because not every message is an attempted answer. A real
+    interviewer answers a clarifying question instead of repeating themselves, and
+    moves on when someone honestly concedes rather than asking the same thing
+    again in different words.
+    """
+
+    intent: Literal["answer", "clarify", "concede"] = "answer"
     assessment: Assessment
     action: Literal["followup", "advance"]
     reply: str
