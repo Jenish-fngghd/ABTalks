@@ -209,6 +209,24 @@ Tailwind and the `motion` package rather than claiming components that were neve
 **Also fixed:** `next@15` shipped 3 high-severity advisories (postcss, sharp);
 upgrading to `next@16.3.0` cleared all of them (`npm audit`: 0 vulnerabilities).
 
+**Three more defects the model bench exposed — all in this repo, none in any model:**
+
+5. **The schema example was anchoring the scorer.** Adding a filled-in JSON example fixed
+   first-try validity (0/5 → 15/15) and halved latency, but its concrete numbers
+   (`correctness: 3 … terminology: 4`) dragged every model's scores toward them — all four
+   models rated the bluffer *exactly* 2.0, which is what made it visible. Replacing them
+   with `<integer 0-5>` placeholders moved gpt-oss-20b's gap from 1.0 to 3.88 and
+   nemotron-3-super's from 0.0 to 2.89.
+
+6. **The bluff rule depended on the model's calibration.** `Assessment.bluffing` required
+   `terminology >= 4`, but models rate terminology very differently — some score a plainly
+   jargon-heavy answer 2/5, so the flag silently never fired. Redefined as a gap
+   (`terminology - specificity >= 2`): detection is 3/3 on every model tested.
+
+7. **Only rate limits triggered the fallback.** A live interview died on
+   `APIConnectionError` from the NIM endpoint. Transient connection errors, timeouts, and
+   5xx now fall back too.
+
 **Confirmed working against a live model** (`gpt-oss-120b`, CAND-006, persistent-grinder):
 bluff answer scored `correctness 1, depth 1, specificity 0, terminology 4` and was flagged,
 triggering a demand for concrete parameters; the strong answer scored `5/4/5/5`; the

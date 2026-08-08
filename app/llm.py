@@ -94,7 +94,12 @@ def structured_ex(
     if OFFLINE and client is None:
         return _offline(user, model_cls), 1
 
-    from openai import RateLimitError
+    # Everything here is transient and observed in practice: daily token caps,
+    # dropped connections to a NIM endpoint, and slow cold starts. None of them
+    # should end an interview that is halfway through.
+    from openai import APIConnectionError, APITimeoutError, InternalServerError, RateLimitError
+
+    transient = (RateLimitError, APIConnectionError, APITimeoutError, InternalServerError)
 
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
     active, active_model = client or _client_once(), model or MODEL
@@ -109,9 +114,11 @@ def structured_ex(
                 temperature=temperature,
                 response_format={"type": "json_object"},
             )
-        except RateLimitError as exc:
+        except transient as exc:
             last = exc
-            spare = None if (client is not None or switched) else _fallback()
+            if client is not None or switched:
+                raise
+            spare = _fallback()
             if spare is None:
                 raise
             active, active_model = spare
