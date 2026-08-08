@@ -74,7 +74,14 @@ class Assessment(BaseModel):
 
     @property
     def bluffing(self) -> bool:
-        return self.terminology >= 4 and self.specificity <= 2
+        """Vocabulary outran substance.
+
+        Defined as a *gap* rather than an absolute terminology score. Models
+        differ in how generously they rate terminology -- some scored a plainly
+        jargon-heavy answer 2/5 -- so requiring terminology >= 4 made detection
+        depend on the model's calibration instead of on the answer.
+        """
+        return self.terminology - self.specificity >= 2 and self.specificity <= 2
 
 
 class TurnResult(BaseModel):

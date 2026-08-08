@@ -61,21 +61,23 @@ the answer: request one concrete example, number, or trade-off from their own wo
 # example is far cheaper than the retry it prevents.
 TURN_SCHEMA_EXAMPLE = """
 
-Reply with JSON in exactly this shape and nothing else:
+Reply with JSON in exactly this shape and nothing else. The angle-bracket text marks
+where your values go -- do not copy it, and do not treat it as a scoring hint:
 {
   "assessment": {
-    "correctness": 3,
-    "depth": 2,
-    "specificity": 1,
-    "terminology": 4,
-    "notes": "one sentence on what the answer did and did not establish",
-    "missing": ["a specific point they did not cover"]
+    "correctness": <integer 0-5>,
+    "depth": <integer 0-5>,
+    "specificity": <integer 0-5>,
+    "terminology": <integer 0-5>,
+    "notes": "<one sentence on what the answer did and did not establish>",
+    "missing": ["<a specific point they did not cover>"]
   },
-  "action": "followup",
-  "reply": "the single line you say to the candidate next"
+  "action": "<followup or advance>",
+  "reply": "<the single line you say to the candidate next>"
 }
 
-All four scores are integers 0-5. `action` is exactly "followup" or "advance"."""
+Score each axis on its own merits across the full 0-5 range. Use 5 when the answer
+fully earns it and 0 when nothing was established."""
 
 
 class Session:

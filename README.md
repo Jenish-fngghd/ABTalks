@@ -78,6 +78,49 @@ that is a straight line through eight slots.
 30 completed. Days absent from the list are `unknown`, never `skipped` — the interviewer
 must not accuse someone of skipping a day it has no record of.
 
+## Choosing the model
+
+Public leaderboards do not answer the question that matters here: *does this model's
+scorer separate a real answer from a fluent-sounding empty one, and does it hold that line
+when the candidate tells it not to?* So `eval/bench_models.py` measures exactly that, using
+the app's own prompt and parsing path.
+
+Candidates were drawn from five model families, with IDs read from each provider's live
+`/models` endpoint rather than from memory. Deprecated Groq IDs (`qwen3-32b`,
+`llama-4-scout`, `kimi-k2`) were excluded per the
+[deprecation notice](https://console.groq.com/docs/deprecations).
+
+Three reps per persona, gap-based bluff rule, non-anchoring schema:
+
+| Model | Provider | gap ↑ | bluff flagged | JSON first try | p50 |
+|---|---|---|---|---|---|
+| **openai/gpt-oss-20b** | Groq | **3.56** | 3/3 | 15/15 | 4.5s |
+| nvidia/nemotron-3-super-120b-a12b | NVIDIA NIM | 3.34 | 3/3 | 12/15 | 2.7s |
+| llama-3.3-70b-versatile | Groq | 2.00 | 3/3 | 15/15 | 0.51s |
+
+`gap` is the strong persona's score minus the bluffer's — the number that decides whether
+the final feedback means anything. **Every model scored the prompt-injection persona 0/5**,
+so that defence is a property of the prompt, not of the model.
+
+Chosen: `openai/gpt-oss-20b` as primary, `nemotron-3-super-120b-a12b` as the fallback
+provider. Runner-up `llama-3.3-70b-versatile` is nine times faster and would win on
+latency alone, but it scored the bluffer 2.33 against gpt-oss-20b's 1.0 — it is the more
+gullible interviewer, and that is the wrong thing to trade away here.
+
+Two findings from that table were bugs in this repo, not in the models:
+
+- **The schema example was anchoring the scorer.** Showing a filled-in example with
+  concrete numbers (`correctness: 3 … terminology: 4`) dragged every model's scores toward
+  those values — every model scored the bluffer *exactly* 2.0. Replacing them with
+  `<integer 0-5>` placeholders moved gpt-oss-20b's gap from 1.0 to 3.88 and
+  nemotron-3-super's from 0.0 to 2.89.
+- **The bluff rule depended on model calibration.** It required `terminology >= 4`, but
+  models rate terminology very differently — some scored a plainly jargon-heavy answer 2/5,
+  so the flag never fired. Defining it as a *gap* (`terminology - specificity >= 2`) instead
+  of an absolute restored 3/3 detection on every model.
+
+Both were only visible because the bench scores personas rather than reading benchmarks.
+
 ## API
 
 Per `technical-spec.md`. One endpoint, no authentication.
