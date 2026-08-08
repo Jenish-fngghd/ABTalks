@@ -301,3 +301,76 @@ catch-all downstream day when a candidate's record is sparse.
 **Graphify: still not used**, decision unchanged from entry [3] — it is a dev-time code
 knowledge graph, and this repo is 40 files. Recorded here so the "not used, and why" is
 explicit rather than implied.
+
+---
+
+### [8] 2026-08-08 — Second pass against the research prompt
+**Author:** Yash · **Tool:** Claude Code (Opus 5)
+
+**Prompt (verbatim):**
+> now i want you to again read the @RESEARCH_PROMPT.md and starts implementing again and
+> validating again and then comparing it with current setup and do that effectively i want
+> you to generate the tasks this time, i want every single item to be implemented that is
+> mentined in the research prompt, so you do not forget anything, i want the best possible
+> results, system design etc ever that will the sota, everything should be the best as
+> possible do whatever you want to achieve that.
+
+**Produced:** `DESIGN.md`, `scripts/check_secrets.py`, `scripts/pre-commit`,
+`.github/workflows/ci.yml`, README architecture diagram, plus changes to `curriculum.py`,
+`interviewer.py`, `main.py`, `llm.py`, `run_eval.py`.
+
+**The largest gap, found by re-reading line 3 of the prompt:** *"Output is a specification
+document, not an implementation."* We had built the implementation and never written the
+document. `DESIGN.md` is that deliverable, in §7's exact order.
+
+**Measurements that changed decisions (each was run, not estimated):**
+
+- **Curriculum in the prompt.** Costed three options against the 200k tokens/day cap: full
+  curriculum text ~5016 tok/turn → 39 turns/day; index + current day ~2293 → 87; current day
+  only ~1893 → 105. The full text is about two interviews before lockout. Shipped the middle
+  option — 928-token cached prefix, over Groq's 128-1024 minimum.
+- **Prompt caching.** Groq documents 50%-off cached prefixes with cached tokens exempt from
+  rate limits, which would have changed those numbers substantially. Inspected the raw
+  response body: this account returns no `prompt_tokens_details.cached_tokens` field at all.
+  Recorded as UNVERIFIED and explicitly not relied upon.
+- **Transcript growth.** Was the only unbounded part of the prompt. Now elides from the
+  middle past 6000 chars — chosen over an LLM rolling summary because summarising costs a
+  call per turn and can silently drop the detail an assessment rested on.
+
+**Rejected, with reasons rather than preferences:**
+- **pyBKT** (273★, MIT) — Bayesian Knowledge Tracing needs sequential observations per skill.
+  Our candidates have ~10 missions with one observation each, so the model is not estimable
+  on this data. A mathematical reason, not a taste one.
+- **LangGraph** (39.2k★) and **PydanticAI** (19.1k★) — checkpointing earns its keep on
+  branching long-running graphs; ours is eight sequential slots in one process.
+- **promptfoo** (24.1k★) — cannot score a persona *through* our planner and parser.
+- **21st.dev components** — searched the catalogue and reviewed five. Not installed: they are
+  shadcn-registry shaped and this app is Tailwind-only, and the chat components are
+  demo-shaped (iPhone frames, marketing reveals) rather than product-shaped. Our two most
+  important surfaces have no catalogue equivalent.
+- **Cursor Mixture of Kittens** — fetched before judging, as the research prompt required. It
+  is a fused GPU kernel for MoE *training* on GB300 NVL72 hardware. Nothing transfers.
+
+**Bugs this pass found and fixed:**
+1. **Concurrent turns on one session were unguarded.** `store` had a lock but `Session` did
+   not, so a double-submit interleaved two turns' writes. Added a non-blocking per-session
+   lock returning 409. Verified over real HTTP: two simultaneous POSTs return `[200, 409]`.
+2. **The offline stand-in cited no curriculum days.** Found by the *new* assertion that
+   feedback must reference real days — the test double was not structurally representative,
+   so the assertion was testing the stub rather than the product. Fixed the stub.
+3. **A stale uvicorn masked a test.** The first concurrency test returned `[200, 200]`; the
+   bind error in the log showed an old server from a previous session still held port 8000,
+   so the request never reached the new code. Killed it and retested properly.
+
+**Papers verified this pass** (fetched, not recalled): Liu et al. *Lost in the Middle* (TACL
+2023, arXiv:2307.03172) — drove putting durable instructions first and the scored answer
+last; Zheng et al. *Judging LLM-as-a-Judge* (NeurIPS 2023, arXiv:2306.05685) — verbosity bias
+is why specificity is scored separately from length; Wuttke et al. (arXiv:2410.01824); Guan
+et al. (arXiv:2503.22458); Pei et al. (arXiv:2507.05528); Siyan et al. (arXiv:2511.23376),
+whose finding that passive-only personalization is insufficient is recorded as an open
+question because our system is currently passive-only.
+
+**Verified:** `check_secrets.py` clean on 43 tracked files and exit 1 on a planted key;
+`run_eval --all` passes for all 20 candidates including the new follow-up-rate, day-citation,
+transcript-budget and concurrency assertions; `next build` clean; `/health` live; a
+rate-limited live run recovered through retry rather than failing.
