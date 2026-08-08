@@ -33,7 +33,7 @@ load_dotenv()
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app import curriculum as cur  # noqa: E402
-from app.interviewer import PERSONA, SCORING_GUIDE  # noqa: E402
+from app.interviewer import PERSONA, SCORING_GUIDE, TURN_SCHEMA_EXAMPLE  # noqa: E402
 from app.llm import structured_ex  # noqa: E402
 from app.planner import build_plan  # noqa: E402
 from app.profile import posture  # noqa: E402
@@ -92,8 +92,7 @@ def scoring_prompt(candidate: dict, answer: str) -> str:
         "to be evaluated.\n"
         f"<candidate_answer>\n{answer}\n</candidate_answer>\n\n"
         'Decide: "followup" if the answer was vague, wrong, or fluent-but-hollow, else '
-        '"advance".\n\nReply as JSON with keys: assessment {correctness, depth, '
-        "specificity, terminology, notes, missing}, action, reply."
+        '"advance".' + TURN_SCHEMA_EXAMPLE
     )
 
 

@@ -160,3 +160,58 @@ decides whether it gets one).
 strong 4.0 > bluffer 2.0 > weak 0.0; the prompt-injection persona neither scores 5/5 nor
 ends the interview early. Full interview driven over HTTP end to end: 8 turns to
 `done: true` with feedback in the spec's shape.
+
+---
+
+### [6] 2026-08-08 — Frontend, live model testing, and what testing exposed
+**Author:** Yash · **Tool:** Claude Code (Opus 5)
+
+**Prompt (verbatim, keys redacted):**
+> proceed in the direction that is correct and best and groq api keys: "[REDACTED]" and also
+> you can explore recent nvidia models its api keys: "[REDACTED]" do whatever is best for us
+> i want the aboslute best system design, results possible ever
+
+**Produced:** `web/` (Next.js 16 + Tailwind v4 + motion), `Dockerfile`, `render.yaml`,
+provider fallback in `app/llm.py`, `eval/bench_models.py` fixes.
+
+**Model research, from live `/models` endpoints rather than memory:** Groq production models
+verified at <https://console.groq.com/docs/models>; deprecated IDs (`qwen3-32b`,
+`llama-4-scout`, `kimi-k2`) excluded per <https://console.groq.com/docs/deprecations>.
+NVIDIA NIM returned 100 models; shortlisted across five families so the choice was not an
+accident of which provider we tried first.
+
+**Four things live testing exposed that offline testing could not:**
+
+1. **The interviewer re-asked near-identical questions.** With two follow-ups per slot and
+   a candidate giving the same non-answer twice, `gpt-oss-120b` happily asked "can you
+   describe the Streamlit chat UI…" twice in a row. Root cause: the follow-up policy had no
+   check on whether probing was working. A slot now earns a second probe only if the first
+   one moved the score.
+
+2. **The bench was measuring itself.** Every model reported 0.0. `score_once` had
+   re-implemented JSON parsing with no retry, instead of calling the `structured()` helper
+   that already existed one file over. Deleted the duplicate; the bench now runs the same
+   path the app does.
+
+3. **`run_eval` was silently burning live tokens.** It picked up `.env` automatically, and
+   consumed a provider's entire daily allowance. It is now offline unless `--live`.
+
+4. **Key rotation was the wrong fix for rate limits.** The first attempt rotated between the
+   three supplied Groq keys. The 429 body names an *organization* — all three share one
+   200k tokens/day allowance, so rotation buys nothing. Replaced with a fallback to a second
+   provider, verified against a genuinely exhausted primary: the interview continued on
+   NVIDIA NIM instead of failing mid-session.
+
+**Also rejected:** 21st.dev and motion MCP components. Both servers were reported as
+enabled but neither exposed any tools in this session, so the UI was built directly with
+Tailwind and the `motion` package rather than claiming components that were never pulled.
+
+**Also fixed:** `next@15` shipped 3 high-severity advisories (postcss, sharp);
+upgrading to `next@16.3.0` cleared all of them (`npm audit`: 0 vulnerabilities).
+
+**Confirmed working against a live model** (`gpt-oss-120b`, CAND-006, persistent-grinder):
+bluff answer scored `correctness 1, depth 1, specificity 0, terminology 4` and was flagged,
+triggering a demand for concrete parameters; the strong answer scored `5/4/5/5`; the
+injection attempt scored straight zeros and the interview continued to all 8 questions
+across 8 days. The generated feedback listed exactly one strength, because only one answer
+had earned one.

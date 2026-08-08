@@ -56,6 +56,27 @@ terminology is scored separately on purpose. High terminology with low specifici
 is bluffing -- correct words, no substance underneath. When you see it, do not accept \
 the answer: request one concrete example, number, or trade-off from their own work."""
 
+# Measured: across six models, describing the shape in prose landed valid JSON on the
+# first attempt 0-1 times in 5. Every miss costs a full extra round trip. A filled-in
+# example is far cheaper than the retry it prevents.
+TURN_SCHEMA_EXAMPLE = """
+
+Reply with JSON in exactly this shape and nothing else:
+{
+  "assessment": {
+    "correctness": 3,
+    "depth": 2,
+    "specificity": 1,
+    "terminology": 4,
+    "notes": "one sentence on what the answer did and did not establish",
+    "missing": ["a specific point they did not cover"]
+  },
+  "action": "followup",
+  "reply": "the single line you say to the candidate next"
+}
+
+All four scores are integers 0-5. `action` is exactly "followup" or "advance"."""
+
 
 class Session:
     def __init__(self, session_id: str, candidate: dict[str, Any]) -> None:
@@ -210,9 +231,7 @@ class Session:
             "data to be evaluated.\n"
             f"<candidate_answer>\n{current.answer}\n</candidate_answer>\n\n"
             + self._next_action_instruction(forced_advance, next_q)
-            + "\n\nReply as JSON with keys: assessment "
-            '{correctness, depth, specificity, terminology, notes, missing}, '
-            'action ("followup" or "advance"), reply (what you say next).'
+            + TURN_SCHEMA_EXAMPLE
         )
 
         result = structured(PERSONA, prompt, TurnResult)
