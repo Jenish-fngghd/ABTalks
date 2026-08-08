@@ -48,15 +48,30 @@ def _extract_json(text: str) -> str:
     return text[start : end + 1] if start != -1 and end > start else text
 
 
-def _keys() -> list[str]:
-    """Primary key first, then any spares.
+# Fallback provider, used when the primary rate-limits.
+#
+# Measured, not guessed: Groq's free tier caps tokens per day per *organization*,
+# not per key -- three keys from one org share one 200k allowance, so rotating
+# keys buys nothing. Falling back to a different provider does. Without this a
+# live demo dies mid-interview once the day's allowance is gone.
+FALLBACK_BASE_URL = os.getenv("FALLBACK_BASE_URL", "")
+FALLBACK_API_KEY = os.getenv("FALLBACK_API_KEY", "")
+FALLBACK_MODEL = os.getenv("FALLBACK_MODEL", "")
 
-    Groq's free tier caps tokens per day per key, and we hit that ceiling during
-    development. Rotating on 429 keeps a live demo alive instead of dying halfway
-    through an interview.
-    """
-    extra = [os.getenv("LLM_API_KEY_2", ""), os.getenv("LLM_API_KEY_3", "")]
-    return [k for k in [API_KEY, *extra] if k]
+_fallback_client: Any = None
+
+
+def _fallback() -> tuple[Any, str] | None:
+    global _fallback_client
+    if not (FALLBACK_BASE_URL and FALLBACK_API_KEY and FALLBACK_MODEL):
+        return None
+    if _fallback_client is None:
+        from openai import OpenAI
+
+        _fallback_client = OpenAI(
+            base_url=FALLBACK_BASE_URL, api_key=FALLBACK_API_KEY, timeout=TIMEOUT
+        )
+    return _fallback_client, FALLBACK_MODEL
 
 
 def structured_ex(
@@ -82,29 +97,25 @@ def structured_ex(
     from openai import RateLimitError
 
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
-    keys = _keys()
-    key_index = 0
+    active, active_model = client or _client_once(), model or MODEL
+    switched = False
     last: Exception | None = None
 
     for attempt in range(1, 4):
-        active = client or _client_once()
         try:
             resp = active.chat.completions.create(
-                model=model or MODEL,
+                model=active_model,
                 messages=messages,
                 temperature=temperature,
                 response_format={"type": "json_object"},
             )
         except RateLimitError as exc:
             last = exc
-            key_index += 1
-            if client is not None or key_index >= len(keys):
+            spare = None if (client is not None or switched) else _fallback()
+            if spare is None:
                 raise
-            from openai import OpenAI
-
-            globals()["_client"] = OpenAI(
-                base_url=BASE_URL, api_key=keys[key_index], timeout=TIMEOUT
-            )
+            active, active_model = spare
+            switched = True
             continue
 
         raw = resp.choices[0].message.content or ""
