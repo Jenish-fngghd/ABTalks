@@ -123,6 +123,23 @@ export function CoveragePanel({ meta }: { meta: Meta | null }) {
           );
         })}
       </ol>
+
+      {/* claude.ai's sidebar footer identifies who's operating the session (the
+          logged-in user). The candidate's identity already sits in the main
+          header next to the transcript -- repeating it here would be redundant,
+          not premium. What's actually parallel is the operator of *this*
+          session: the interviewer itself. */}
+      <div className="mt-auto flex items-center gap-2.5 border-t border-line pt-4">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-soft">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="text-accent">
+            <path d="M12 1 L14 10 L23 12 L14 14 L12 23 L10 14 L1 12 L10 10 Z" fill="currentColor" />
+          </svg>
+        </span>
+        <div className="min-w-0 leading-tight">
+          <p className="truncate text-[12px] font-medium text-text">Interviewer</p>
+          <p className="mono truncate text-[10px] text-faint">adapts as you answer</p>
+        </div>
+      </div>
     </aside>
   );
 }

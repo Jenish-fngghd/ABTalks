@@ -89,7 +89,11 @@ export function CandidatePicker({
               />
               <div className="flex items-baseline justify-between gap-3">
                 <span className="truncate text-[15px] font-medium">{c.member.name}</span>
-                <span className="mono shrink-0 text-[10px] uppercase tracking-wider" style={{ color: p.color }}>
+                <span
+                  className="mono flex shrink-0 items-center gap-1 text-[10px] uppercase tracking-wider"
+                  style={{ color: p.color }}
+                >
+                  <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ background: p.color }} />
                   {p.label}
                 </span>
               </div>
