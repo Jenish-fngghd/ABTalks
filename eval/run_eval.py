@@ -24,7 +24,7 @@ load_dotenv()
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app import curriculum as cur  # noqa: E402
-from app import llm  # noqa: E402
+from app import llm, store  # noqa: E402
 from app.interviewer import MAX_TURNS, TRANSCRIPT_CHAR_BUDGET, Session  # noqa: E402
 from app.planner import MIN_DAYS, MIN_QUESTIONS, build_plan  # noqa: E402
 from app.profile import day_signals  # noqa: E402
@@ -281,16 +281,18 @@ def main() -> int:
     else:
         print(f"[ok]   transcript bounded at {size} chars (budget {TRANSCRIPT_CHAR_BUDGET})")
 
-    # 4. Two turns on one session must not interleave.
-    concurrent = Session(subject["member"]["id"] + "-race", subject)
-    concurrent.start()
-    concurrent.lock.acquire()
+    # 4. Two turns on one session must not interleave. Locking moved from the
+    # Session object to store.py, keyed by session id (see interviewer.py's
+    # to_dict/from_dict docstring) -- a Redis-backed store hands back a fresh
+    # object per request, so there is no single instance to hold a lock on.
+    race_id = subject["member"]["id"] + "-race"
+    store.acquire_lock(race_id)  # first turn holds it
     try:
-        second_got_in = concurrent.lock.acquire(blocking=False)
+        second_got_in = store.acquire_lock(race_id)
     finally:
         if second_got_in:
-            concurrent.lock.release()
-        concurrent.lock.release()
+            store.release_lock(race_id)
+        store.release_lock(race_id)
     if second_got_in:
         print("[FAIL] a second concurrent turn was admitted on one session")
         failures += 1

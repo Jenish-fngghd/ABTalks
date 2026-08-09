@@ -4,7 +4,7 @@ A technical interviewer that reads a candidate's 31-day AI cohort record and con
 personalised, adaptive interview from it — then produces feedback grounded in what the
 candidate actually said.
 
-**Live demo:** _(deploy pending — see Deployment)_
+**Live demo:** https://ab-talks-sigma.vercel.app
 **AI usage log:** [PROMPTS.md](PROMPTS.md)
 
 ---
@@ -238,7 +238,9 @@ app/
   planner.py      the interview plan; owns the coverage guarantees
   interviewer.py  the loop: prompts, turn handling, follow-up policy, report
   llm.py          OpenAI-compatible client + offline stand-in
-  store.py        in-memory session store
+  store.py        session store -- in-memory, or Redis if UPSTASH_* is set
+api/
+  index.py        Vercel Python entry point; re-exports app.main:app
 eval/
   run_eval.py     personas + assertions
   bench_models.py cross-provider model comparison on this task
@@ -247,8 +249,9 @@ web/
   components/            CoveragePanel, Transcript, Composer, Report, CandidatePicker
   lib/api.ts             typed client for the endpoint
 data/             curriculum.json, candidates.json
-Dockerfile        backend image (single worker, deliberately)
-render.yaml       backend deploy config
+Dockerfile        backend image for Render (single worker, deliberately)
+render.yaml       Render deploy config
+vercel.json       routes every path to api/index.py, for the Vercel backend deploy
 ```
 
 Domain logic imports without a server running, which is what makes the eval cheap.
@@ -274,13 +277,23 @@ new turns announced through an ARIA live region.
 
 ## Deployment
 
-Backend needs a host without a short serverless timeout — model calls run several seconds
-per turn — so it ships as a container (`Dockerfile`, `render.yaml`) rather than a
-serverless function. Frontend is a static Next.js build; point `NEXT_PUBLIC_API_URL` at the
-backend.
+Frontend is a static Next.js build (Vercel, root directory `web`) pointing
+`NEXT_PUBLIC_API_URL` at wherever the backend lands.
 
-Sessions are in-memory, so the app runs with **one worker**; a redeploy drops in-flight
-interviews. Swapping `store.py` for Redis is a three-method change if that ever matters.
+Backend has two supported paths:
+
+- **Render** (`Dockerfile`, `render.yaml`) — a normal long-running container. Sessions live
+  in an in-memory dict (`app/store.py`), so it runs with **one worker**; a redeploy drops
+  in-flight interviews, and a second worker would not see the first's sessions.
+- **Vercel** (`api/index.py`, `vercel.json`) — as a second Vercel project with its root
+  directory set to the repo root (not `web`). Requires switching `store.py` to its Redis
+  backend first: set `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` (free tier at
+  upstash.com). Serverless instances don't share memory with each other, so the in-memory
+  store silently loses sessions across instances on Vercel specifically — Render's single
+  container never has this problem, which is why it stays the default recommendation.
+
+Either way, set `LLM_API_KEY` (and optionally `FALLBACK_*`) as real environment variables
+in that host's dashboard — never in a committed file.
 
 ## Security
 

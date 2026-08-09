@@ -91,14 +91,17 @@ def interview(req: InterviewRequest) -> InterviewResponse:
 
     # Non-blocking: a second in-flight request on the same session is a duplicate
     # submit, not a queued turn. Queueing it would score the same answer twice.
-    if not session.lock.acquire(blocking=False):
+    # Keyed by session id in the store (not an attribute on the object), since a
+    # Redis-backed store may hand back a freshly-deserialized Session on every
+    # request -- there is no single object instance to hold a lock across calls.
+    if not store.acquire_lock(req.sessionId):
         raise HTTPException(
             status_code=409, detail="A turn is already in progress for this session."
         )
     try:
         reply, done = _guarded(session.answer, req.message or "")
     finally:
-        session.lock.release()
+        store.release_lock(req.sessionId)
     store.put(session)
     return InterviewResponse(
         reply=reply,

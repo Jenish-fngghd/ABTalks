@@ -9,14 +9,14 @@ wishes, and keeps the transcript explainable after the fact.
 
 from __future__ import annotations
 
-import threading
+from dataclasses import asdict
 from typing import Any
 
 from pydantic import BaseModel
 
 from app import curriculum as cur
 from app.llm import structured
-from app.profile import posture
+from app.profile import Posture, posture
 from app.planner import build_plan
 from app.schemas import Assessment, Feedback, PlannedQuestion, Turn, TurnResult
 
@@ -155,12 +155,6 @@ fully earns it and 0 when nothing was established."""
 class Session:
     def __init__(self, session_id: str, candidate: dict[str, Any]) -> None:
         self.id = session_id
-        # One turn at a time per session. A double-submit (impatient click, retry
-        # after a slow scoring call) would otherwise run two turns concurrently and
-        # interleave their writes to self.turns and self.slot. The API layer takes
-        # this without blocking and returns 409 rather than queueing, because the
-        # second request is nearly always a duplicate of the first.
-        self.lock = threading.Lock()
         self.candidate = candidate
         self.posture = posture(candidate)
         self.plan: list[PlannedQuestion] = build_plan(candidate)
@@ -170,6 +164,42 @@ class Session:
         self.clarifications = 0
         self.done = False
         self.feedback: Feedback | None = None
+
+    # --- (de)serialization for store.py -----------------------------------
+    # The double-submit lock used to live on the instance (a threading.Lock),
+    # which only works when "the same session" means "the same object in the
+    # same process". A store backend that survives process boundaries (Redis,
+    # for serverless) can't carry a lock across that boundary, so store.py owns
+    # locking uniformly now -- keyed by session id, not by object identity.
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "candidate": self.candidate,
+            "posture": asdict(self.posture),
+            "plan": [p.model_dump() for p in self.plan],
+            "turns": [t.model_dump() for t in self.turns],
+            "slot": self.slot,
+            "followups": self.followups,
+            "clarifications": self.clarifications,
+            "done": self.done,
+            "feedback": self.feedback.model_dump() if self.feedback else None,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "Session":
+        self = cls.__new__(cls)
+        self.id = data["id"]
+        self.candidate = data["candidate"]
+        self.posture = Posture(**data["posture"])
+        self.plan = [PlannedQuestion(**p) for p in data["plan"]]
+        self.turns = [Turn(**t) for t in data["turns"]]
+        self.slot = data["slot"]
+        self.followups = data["followups"]
+        self.clarifications = data["clarifications"]
+        self.done = data["done"]
+        self.feedback = Feedback(**data["feedback"]) if data["feedback"] else None
+        return self
 
     # --- introspection used by the API `meta` block and the UI ---------------
 
