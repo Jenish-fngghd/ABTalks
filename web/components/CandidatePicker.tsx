@@ -294,7 +294,7 @@ function CandidateCard({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.96 }}
       transition={{
-        layout: { duration: 0.3, ease: [0.32, 0.72, 0, 1] },
+        layout: { duration: 0.45, ease: [0.32, 0.72, 0, 1] },
         default: { duration: 0.2, delay: Math.min(i * 0.015, 0.18) },
       }}
       whileHover={busy ? undefined : { y: -2 }}
