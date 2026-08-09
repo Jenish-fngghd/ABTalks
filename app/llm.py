@@ -108,11 +108,21 @@ def structured_ex(
     temperature: float = 0.6,
     client: Any = None,
     model: str | None = None,
+    validate: Any = None,
 ) -> tuple[T, int]:
     """One call, validated into `model_cls`. Returns (result, attempts_used).
 
     Retries once with the schema attached when output does not validate, and
     rotates to a spare API key on a rate limit.
+
+    `validate`, if given, is `Callable[[T], str | None]` -- called on a
+    successfully-parsed result, returning an error string if something about
+    the *content* is suspicious (not just malformed JSON) or None if it is
+    fine. A hit is treated exactly like a validation failure: the model is
+    told what was wrong and asked to redo it, within the same attempt budget.
+    This is the generic version of the U+FFFD check below -- callers with
+    domain knowledge (e.g. "an advancing reply must contain a real question")
+    plug in their own check instead of that knowledge living in this module.
 
     ponytail: json_object mode + parse + one retry, rather than provider-specific
     json_schema. Open-weight endpoints support the former far more consistently.
@@ -180,7 +190,7 @@ def structured_ex(
             )
             continue
         try:
-            return model_cls.model_validate_json(_extract_json(raw)), attempt
+            parsed = model_cls.model_validate_json(_extract_json(raw))
         except (ValidationError, ValueError) as exc:
             last = exc
             messages.append({"role": "assistant", "content": raw})
@@ -193,13 +203,32 @@ def structured_ex(
                     ),
                 }
             )
+            continue
+
+        problem = validate(parsed) if validate else None
+        if problem:
+            last = ValueError(problem)
+            messages.append({"role": "assistant", "content": raw})
+            messages.append(
+                {
+                    "role": "user",
+                    "content": f"{problem} Reply again with the same JSON shape, fixing that.",
+                }
+            )
+            continue
+        return parsed, attempt
     raise RuntimeError(f"model returned unusable JSON after retries: {last}")
 
 
 def structured(
-    system: str, user: str, model_cls: type[T], *, temperature: float = 0.6
+    system: str,
+    user: str,
+    model_cls: type[T],
+    *,
+    temperature: float = 0.6,
+    validate: Any = None,
 ) -> T:
-    return structured_ex(system, user, model_cls, temperature=temperature)[0]
+    return structured_ex(system, user, model_cls, temperature=temperature, validate=validate)[0]
 
 
 # --- offline test double ------------------------------------------------------

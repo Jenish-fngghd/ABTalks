@@ -386,7 +386,14 @@ class Session:
             + f"\n{cur.brief(q.day)}\n\n"
             'Reply as JSON: {"reply": "<greeting and first question>"}'
         )
-        reply = structured(system_prompt(), prompt, Opening).reply
+        def _sane_opening(r: Opening) -> str | None:
+            if not r.reply.strip():
+                return "Reply was empty."
+            if "?" not in r.reply:
+                return "`reply` must end in an actual first question, not just a greeting."
+            return None
+
+        reply = structured(system_prompt(), prompt, Opening, validate=_sane_opening).reply
         self.turns.append(Turn(slot=0, day=q.day, question=reply))
         return reply
 
@@ -437,7 +444,23 @@ class Session:
             + TURN_SCHEMA_EXAMPLE
         )
 
-        result = structured(system_prompt(), prompt, TurnResult)
+        # Code-level backstop, not just a prompt instruction: catches the exact
+        # failure this project has hit live -- action="advance" with a reply that
+        # only announces the next day/topic instead of phrasing a question, or an
+        # empty reply. Auto-retried once via structured()'s validate hook rather
+        # than shipping the bad turn to the candidate.
+        def _sane_turn(r: TurnResult) -> str | None:
+            if not r.reply.strip():
+                return "Reply was empty."
+            if r.action == "advance" and next_q is not None and "?" not in r.reply:
+                return (
+                    "You set action to \"advance\" but `reply` did not contain an "
+                    "actual question -- it must ask something concrete about the "
+                    "next topic, not just name the day or topic."
+                )
+            return None
+
+        result = structured(system_prompt(), prompt, TurnResult, validate=_sane_turn)
 
         # A clarifying question is not an attempt, so it is not scored and does not
         # consume the slot. Repeating the question at someone who asked what it
