@@ -36,6 +36,14 @@ export function CandidatePicker({
         </p>
       </motion.div>
 
+      {candidates.length === 0 && (
+        <p className="mt-10 rounded-xl border border-line bg-panel px-4 py-3 text-[13px] text-muted">
+          No candidate records loaded. The API reached <code className="mono">/api/candidates</code>{" "}
+          but it came back empty — check that <code className="mono">data/candidates.json</code> is
+          present on the backend.
+        </p>
+      )}
+
       <div className="mt-10 grid gap-3 sm:grid-cols-2">
         {candidates.map((c, i) => {
           const p = posture(c);
