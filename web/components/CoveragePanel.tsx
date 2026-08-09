@@ -1,7 +1,9 @@
 "use client";
 
-import { motion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import type { Meta } from "@/lib/api";
+
+const POP = { type: "spring", stiffness: 640, damping: 22, mass: 0.7 } as const;
 
 const INTENT_LABEL: Record<string, string> = {
   verify: "verify",
@@ -99,13 +101,11 @@ export function CoveragePanel({ meta }: { meta: Meta | null }) {
                         {INTENT_LABEL[q.intent] ?? q.intent}
                       </span>
                     </div>
-                    <p
-                      className={`truncate text-[13px] leading-snug ${
-                        current ? "font-medium text-text" : "text-muted"
-                      }`}
-                    >
-                      {q.topic}
-                    </p>
+                    {current ? (
+                      <ShimmerLabel text={q.topic} />
+                    ) : (
+                      <p className="truncate text-[13px] leading-snug text-muted">{q.topic}</p>
+                    )}
                     {current && (
                       <motion.p
                         initial={{ opacity: 0, height: 0 }}
@@ -144,7 +144,14 @@ export function CoveragePanel({ meta }: { meta: Meta | null }) {
   );
 }
 
+// Tick pop-in and the shimmer sweep below are adapted from 21st.dev's "Task
+// Steps" (https://21st.dev/@ddoemonn/components/task-steps, MIT, found via the
+// 21st.dev MCP search) -- not a drop-in, since that component is index-linear
+// (everything before `current` is done) where this plan is slot-based against
+// daysCovered and has no error state, but the covered-tick animation and the
+// active-row text treatment are a real upgrade over the flat dots this had.
 function StatusDot({ covered, current }: { covered: boolean; current: boolean }) {
+  const reduced = useReducedMotion();
   if (current) {
     return (
       <span className="relative mt-1.5 block h-2 w-2 shrink-0">
@@ -154,11 +161,53 @@ function StatusDot({ covered, current }: { covered: boolean; current: boolean })
     );
   }
   return (
-    <span
-      className={`mt-1.5 block h-2 w-2 shrink-0 rounded-full ${
-        covered ? "bg-good" : "border border-line bg-transparent"
-      }`}
-    />
+    <span className="relative mt-1 grid h-3.5 w-3.5 shrink-0 place-items-center">
+      <AnimatePresence initial={false}>
+        {covered ? (
+          <motion.span
+            key="done"
+            className="col-start-1 row-start-1 grid h-3.5 w-3.5 place-items-center rounded-[4px] bg-good/15 text-good"
+            initial={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.4 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={reduced ? { duration: 0 } : POP}
+          >
+            <svg viewBox="0 0 256 256" width="9" height="9" fill="none" aria-hidden>
+              <polyline
+                points="216 72 104 184 48 128"
+                stroke="currentColor"
+                strokeWidth="28"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </motion.span>
+        ) : (
+          <motion.span
+            key="pending"
+            className="col-start-1 row-start-1 h-2 w-2 rounded-full border border-line bg-transparent"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0 }}
+          />
+        )}
+      </AnimatePresence>
+    </span>
+  );
+}
+
+function ShimmerLabel({ text }: { text: string }) {
+  const reduced = useReducedMotion();
+  if (reduced) {
+    return <p className="truncate text-[13px] font-medium leading-snug text-text">{text}</p>;
+  }
+  return (
+    <motion.p
+      className="truncate bg-[linear-gradient(90deg,var(--muted)_38%,var(--text)_50%,var(--muted)_62%)] bg-clip-text text-[13px] font-medium leading-snug text-transparent [background-size:220%_100%]"
+      animate={{ backgroundPosition: ["120% 0", "-120% 0"] }}
+      transition={{ duration: 1.8, ease: "linear", repeat: Infinity }}
+    >
+      {text}
+    </motion.p>
   );
 }
 
