@@ -205,12 +205,21 @@ export default function Page() {
             <p className="truncate text-[14px] font-medium">{candidate?.member.name}</p>
             <p className="truncate text-[12px] text-muted">{candidate?.member.jobRole}</p>
           </div>
-          <button
+          <motion.button
             onClick={restart}
-            className="shrink-0 text-[12px] text-muted transition-colors hover:text-text"
+            whileHover={{ opacity: 1 }}
+            className="mono flex shrink-0 items-center gap-1.5 text-[12px] text-muted opacity-80 transition-colors hover:text-text"
           >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M18 6L6 18M6 6l12 12"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+            </svg>
             End
-          </button>
+          </motion.button>
         </header>
         <Transcript
           messages={messages}

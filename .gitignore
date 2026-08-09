@@ -10,3 +10,10 @@ dist/
 build/
 .DS_Store
 eval/transcripts/
+
+# Root-only npx installer artifacts from `npx shadcn mcp init` (react-bits MCP
+# setup) -- a bare shadcn devDependency with no scripts, redundant with
+# web/package.json and confusing Next.js's workspace-root detection. The
+# actual MCP config it produced (.mcp.json) is still committed.
+/package.json
+/package-lock.json

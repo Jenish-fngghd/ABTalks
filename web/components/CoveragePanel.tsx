@@ -31,21 +31,37 @@ export function CoveragePanel({ meta }: { meta: Meta | null }) {
 
   return (
     <aside
-      className="flex w-full shrink-0 flex-col gap-5 border-line bg-panel p-5 lg:h-dvh lg:w-[340px] lg:overflow-y-auto lg:border-r"
+      className="relative flex w-full shrink-0 flex-col gap-5 overflow-hidden border-line bg-panel p-5 lg:h-dvh lg:w-[340px] lg:overflow-y-auto lg:border-r"
       aria-label="Interview plan and coverage"
     >
-      <div>
-        <div className="flex items-baseline justify-between">
+      {/* A quiet accent wash at the top of the panel -- the flat-panel version read
+          as a form sidebar; this reads as a crafted surface, the way claude.ai's
+          sidebar is never pure flat colour either. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -left-20 -top-24 h-64 w-64 rounded-full opacity-[0.06] blur-3xl"
+        style={{ background: "var(--accent)" }}
+      />
+      <div className="relative">
+        <div className="flex items-center gap-2">
+          {/* A four-point spark reads clearly at this size; the eight-point version
+              (see ThinkingGlyph) needs more pixels to avoid collapsing into a plus
+              sign, so this is a deliberately simpler mark, not the same glyph scaled
+              down. */}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="shrink-0 text-accent">
+            <path d="M12 2 Q13 10.5 22 12 Q13 13.5 12 22 Q11 13.5 2 12 Q11 10.5 12 2 Z" fill="currentColor" />
+          </svg>
           <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-faint">
             Interview plan
           </h2>
-          <span className="mono text-xs text-muted">
+          <span className="mono ml-auto text-xs text-muted">
             {meta.questionsAsked}/{meta.questionsPlanned}
           </span>
         </div>
-        <div className="mt-2 h-1 overflow-hidden rounded-full bg-line">
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-line">
           <motion.div
-            className="h-full bg-accent"
+            className="h-full rounded-full bg-accent"
+            style={{ boxShadow: "0 0 8px var(--accent)" }}
             initial={{ width: 0 }}
             animate={{ width: `${progress * 100}%` }}
             transition={{ duration: 0.5, ease: [0.32, 0.72, 0, 1] }}
@@ -69,6 +85,7 @@ export function CoveragePanel({ meta }: { meta: Meta | null }) {
                 initial={false}
                 animate={{
                   backgroundColor: current ? "var(--accent-soft)" : "rgba(0,0,0,0)",
+                  boxShadow: current ? "0 0 0 1px var(--accent)" : "0 0 0 0 transparent",
                 }}
                 transition={{ duration: 0.35 }}
                 className="rounded-lg px-3 py-2.5"

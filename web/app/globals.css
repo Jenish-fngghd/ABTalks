@@ -74,13 +74,22 @@ body {
 }
 
 body {
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
 .mono {
   font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
   font-feature-settings: "tnum";
+}
+
+/* Reserved for display moments -- headline greeting, the score reveal, the
+   candidate's name on the report. Everything else stays in the UI sans; a serif on
+   every heading reads as decorated, not premium. */
+.font-display {
+  font-family: var(--font-display), Georgia, serif;
+  font-optical-sizing: auto;
 }
 
 ::selection {

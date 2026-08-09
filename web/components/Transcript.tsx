@@ -37,9 +37,9 @@ export function Transcript({
           {messages.map((m, i) => (
             <motion.div
               key={i}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, ease: [0.32, 0.72, 0, 1] }}
+              initial={{ opacity: 0, y: 8, filter: "blur(4px)" }}
+              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+              transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
               className={m.role === "candidate" ? "flex justify-end" : ""}
             >
               {m.role === "interviewer" ? (
@@ -74,15 +74,7 @@ export function Transcript({
               transition={{ duration: 0.2 }}
               className="flex items-center gap-2.5"
             >
-              <div className="flex gap-1">
-                {[0, 1, 2].map((i) => (
-                  <span
-                    key={i}
-                    className="thinking-dot h-1.5 w-1.5 rounded-full bg-accent"
-                    style={{ animationDelay: `${i * 0.16}s` }}
-                  />
-                ))}
-              </div>
+              <ThinkingGlyph />
               {/* Scoring takes seconds. Naming what it is doing beats a bare spinner. */}
               <span className="text-[13px] text-muted">
                 Assessing your answer{thinkingDay ? ` against Day ${thinkingDay}` : ""}…
@@ -94,5 +86,29 @@ export function Transcript({
         <div ref={endRef} />
       </div>
     </div>
+  );
+}
+
+/** An eight-point spark: continuous breathing rotation while a turn is scored,
+ * standing in for a bare spinner the way naming the task beats "Loading…". */
+function ThinkingGlyph() {
+  return (
+    <motion.svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      className="shrink-0 text-accent"
+      animate={{ rotate: 360, scale: [1, 1.12, 1] }}
+      transition={{
+        rotate: { duration: 3.2, repeat: Infinity, ease: "linear" },
+        scale: { duration: 1.6, repeat: Infinity, ease: "easeInOut" },
+      }}
+    >
+      <path
+        d="M12 1 L14 10 L23 12 L14 14 L12 23 L10 14 L1 12 L10 10 Z"
+        fill="currentColor"
+      />
+    </motion.svg>
   );
 }

@@ -98,25 +98,65 @@ export function Report({
           <p className="mono text-[11px] uppercase tracking-[0.16em] text-faint">
             Interview complete
           </p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">{name}</h1>
+          <h1 className="font-display mt-2 text-3xl font-medium tracking-tight sm:text-4xl">
+            {name}
+          </h1>
           <p className="mt-1 text-[14px] text-muted">
             {meta.questionsAsked} questions across {meta.daysCovered.length} curriculum days
           </p>
         </div>
-        <button
+        <motion.button
           onClick={copyReport}
-          className="mono shrink-0 rounded-lg border border-line bg-panel px-3 py-2 text-[12px] text-muted transition-colors hover:bg-panel-2"
+          whileHover={{ y: -1 }}
+          whileTap={{ scale: 0.97 }}
+          className="mono flex shrink-0 items-center gap-1.5 rounded-lg border border-line bg-panel px-3 py-2 text-[12px] text-muted transition-colors hover:bg-panel-2"
         >
+          <motion.svg
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            initial={false}
+            animate={copied ? { scale: [1, 1.3, 1] } : {}}
+            transition={{ duration: 0.35 }}
+          >
+            {copied ? (
+              <path
+                d="M4 12l5 5L20 6"
+                stroke="var(--good)"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            ) : (
+              <>
+                <rect x="8" y="8" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.8" />
+                <path
+                  d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                />
+              </>
+            )}
+          </motion.svg>
           {copied ? "Copied" : "Copy report"}
-        </button>
+        </motion.button>
       </motion.header>
 
       <motion.section
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, delay: 0.08 }}
-        className="mt-10 rounded-2xl border border-line bg-panel p-6 sm:p-8"
+        className="relative mt-10 overflow-hidden rounded-2xl border border-line bg-panel p-6 shadow-lg sm:p-8"
       >
+        {/* A quiet radial glow behind the score, coloured to match it -- the score
+            card is the report's single highest-weight surface, so it earns depth
+            the section cards below it don't need. */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -left-16 -top-16 h-56 w-56 rounded-full opacity-[0.07] blur-3xl"
+          style={{ background: tone(overall) }}
+        />
         <div className="flex items-end gap-4">
           <motion.span
             className="mono text-5xl font-semibold tabular-nums"
@@ -275,12 +315,23 @@ export function Report({
         </Section>
       )}
 
-      <button
+      <motion.button
         onClick={onRestart}
-        className="mt-12 rounded-xl border border-line bg-panel px-5 py-3 text-[14px] font-medium transition-colors hover:bg-panel-2"
+        whileHover={{ y: -1, borderColor: "var(--accent)" }}
+        whileTap={{ scale: 0.98 }}
+        className="mt-12 flex items-center gap-2 rounded-xl border border-line bg-panel px-5 py-3 text-[14px] font-medium"
       >
         Interview another candidate
-      </button>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+          <path
+            d="M5 12h14M13 6l6 6-6 6"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </motion.button>
     </main>
   );
 }

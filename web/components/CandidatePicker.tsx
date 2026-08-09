@@ -25,7 +25,9 @@ export function CandidatePicker({
   return (
     <main className="mx-auto max-w-3xl px-5 py-12 sm:px-8 sm:py-16">
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">AI Interview Agent</h1>
+        <h1 className="font-display text-3xl font-medium tracking-tight sm:text-4xl">
+          AI Interview Agent
+        </h1>
         <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-muted">
           Pick a candidate. The agent reads their 31-day cohort record, builds an interview plan
           from what they struggled with, skipped, or passed too easily, and adapts as they answer.
@@ -55,10 +57,27 @@ export function CandidatePicker({
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: Math.min(i * 0.03, 0.4) }}
+              whileHover={busy ? undefined : { y: -2 }}
+              whileTap={busy ? undefined : { scale: 0.99 }}
               disabled={busy}
               onClick={() => onPick(c)}
-              className="rounded-xl border border-line bg-panel p-4 text-left transition-colors hover:bg-panel-2 disabled:opacity-40"
+              className="group relative overflow-hidden rounded-xl border border-line bg-panel p-4 text-left shadow-sm transition-shadow hover:shadow-lg disabled:opacity-40"
             >
+              {/* Left accent bar in the posture colour -- a real positioned element,
+                  not a box-shadow trick (an inset offset shadow with no blur/spread
+                  paints a thin ring around all four sides, not just one). */}
+              <span
+                aria-hidden
+                className="absolute inset-y-0 left-0 w-[3px] rounded-l-xl"
+                style={{ background: p.color }}
+              />
+              {/* A soft sheen following the posture colour -- visible only on hover,
+                  so the card reads as crafted rather than a flat bordered box. */}
+              <div
+                aria-hidden
+                className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full opacity-0 blur-2xl transition-opacity duration-300 group-hover:opacity-20"
+                style={{ background: p.color }}
+              />
               <div className="flex items-baseline justify-between gap-3">
                 <span className="truncate text-[15px] font-medium">{c.member.name}</span>
                 <span className="mono shrink-0 text-[10px] uppercase tracking-wider" style={{ color: p.color }}>
