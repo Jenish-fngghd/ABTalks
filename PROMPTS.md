@@ -19,7 +19,7 @@ Template used for each entry:
 ---
 
 ### [1] 2026-08-08 — Research prompt for the problem statement
-**Author:** Yash · **Tool:** Claude Code (Opus 5)
+**Author:** Jenish · **Tool:** Claude Code (Opus 5)
 
 **Prompt (verbatim, abridged where it quotes the published problem statement):**
 > we have participated in the "https://www.abtalks.in/hackathon/" and we have been given
@@ -44,7 +44,7 @@ despite the prompt asking for detailed analysis. Added in the next pass.
 ---
 
 ### [2] 2026-08-08 — Verify the research prompt, add model and technique research
-**Author:** Yash · **Tool:** Claude Code (Opus 5)
+**Author:** Jenish · **Tool:** Claude Code (Opus 5)
 
 **Prompt (verbatim):**
 > now first i want you to read the prompt given earlier for which you have generate the
@@ -70,7 +70,7 @@ the reader to fetch it, judge applicability, and **not include it for flavor**.
 ---
 
 ### [3] 2026-08-08 — Graph engineering: verify sources before adopting
-**Author:** Yash · **Tool:** Claude Code (Opus 5)
+**Author:** Jenish · **Tool:** Claude Code (Opus 5)
 
 **Prompt (verbatim):**
 > also what do you say about the graph engineering domain also
@@ -98,7 +98,7 @@ whether it beats a flat list.
 ---
 
 ### [4] 2026-08-08 — Submission requirements
-**Author:** Yash · **Tool:** Claude Code (Opus 5)
+**Author:** Jenish · **Tool:** Claude Code (Opus 5)
 
 **Prompt (verbatim):**
 > okay do the prompt includes standard folder structured and loggin every step in detail
@@ -114,7 +114,7 @@ concrete.
 ---
 
 ### [5] 2026-08-08 — Backend implementation
-**Author:** Yash · **Tool:** Claude Code (Opus 5)
+**Author:** Jenish · **Tool:** Claude Code (Opus 5)
 
 **Prompt (verbatim):**
 > okay now you can consider @RESEARCH_PROMPT.md and starts implementation
@@ -164,7 +164,7 @@ ends the interview early. Full interview driven over HTTP end to end: 8 turns to
 ---
 
 ### [6] 2026-08-08 — Frontend, live model testing, and what testing exposed
-**Author:** Yash · **Tool:** Claude Code (Opus 5)
+**Author:** Jenish · **Tool:** Claude Code (Opus 5)
 
 **Prompt (verbatim, keys redacted):**
 > proceed in the direction that is correct and best and groq api keys: "[REDACTED]" and also
@@ -237,7 +237,7 @@ had earned one.
 ---
 
 ### [7] 2026-08-08 — Breeth correction, prior-art review, and making the graph load-bearing
-**Author:** Yash · **Tool:** Claude Code (Opus 5)
+**Author:** Jenish · **Tool:** Claude Code (Opus 5)
 
 **Prompt (verbatim):**
 > now can you tell me where you have used the breeth [screenshot of Breeth Pro access card]
@@ -305,7 +305,7 @@ explicit rather than implied.
 ---
 
 ### [8] 2026-08-08 — Second pass against the research prompt
-**Author:** Yash · **Tool:** Claude Code (Opus 5)
+**Author:** Jenish · **Tool:** Claude Code (Opus 5)
 
 **Prompt (verbatim):**
 > now i want you to again read the @RESEARCH_PROMPT.md and starts implementing again and
@@ -378,7 +378,7 @@ rate-limited live run recovered through retry rather than failing.
 ---
 
 ### [9] 2026-08-09 — Cross-verification against the problem statement itself
-**Author:** Yash · **Tool:** Claude Code (Opus 5)
+**Author:** Jenish · **Tool:** Claude Code (Opus 5)
 
 **Prompts (verbatim, two in sequence):**
 > now can you cross verify if everything asked has been implemented in the best possible
@@ -445,3 +445,225 @@ a purely-clarifying candidate run to the turn cap, so it became per-session.
 **Verified:** 8 personas pass, 20/20 candidates, secrets clean on 44 files, `next build`
 clean. Live end to end, the report's first next-step was *"Rehearse starting every answer by
 restating the specific question asked"* — genuine interview coaching rather than grading.
+
+---
+
+### [10] 2026-08-09 — Live-testing the UI, not just building it
+**Author:** Jenish · **Tool:** Claude Code (Opus 5)
+
+**Prompt (verbatim):**
+> now i think we should focus on the ui/ux as this is also included in that last point,
+> so now lets focus on the ui and for that i believe you already have 21st.dev and
+> additionally also enable the react bits mcp [...] proceed in the direction which is
+> correct and best and start implementation one by one according to the priority
+
+**What happened.** Rather than trust `next build`, drove a full interview through the real
+browser (Chrome, via the claude-in-chrome MCP tools) end to end. Found a genuine bug this
+way that no amount of code review would have caught: `build_plan()`'s pass-1/2/3 dedup
+logic tracked `per_day` (the day actually asked) but checked it against `sig.day` (the
+original day) — for a skipped day bridged elsewhere, those differ, so the same skipped
+signal survived into the next pass and got bridged a second time. Live: candidate CAND-001
+was asked the identical "Capstone Project" framing twice, burning the 8th slot on a repeat
+instead of a fresh topic.
+
+Also found live: `prefers-reduced-motion` was wired into `globals.css` but every animation
+in the app is a Framer Motion component, which never reads that media query — the CSS fix
+did nothing. And the README's own `--all` example output was stale (predated a feature
+added earlier the same day), so a judge running the command verbatim would see different
+output than documented.
+
+**Produced:** `app/planner.py` (`planned_signal_days` tracking, pass-3 exclusion of
+`skipped` signals), `eval/run_eval.py` (permanent duplicate-slot assertion), `web/app/
+layout.tsx` (`MotionConfig reducedMotion="user"`), `README.md` (regenerated example output).
+
+**Kept:** all three fixes, plus the duplicate-slot assertion as a standing regression
+guard — verified 0 duplicates across all 20 seed candidates after the fix.
+
+**Commit:** `2a8cd21`, `17fb673`, `af43ca0`
+
+---
+
+### [11] 2026-08-09 — Surfacing adaptivity in the flow, not just the report
+**Author:** Jenish · **Tool:** Claude Code (Opus 5)
+
+Continuation of the same UI-focus session. The judging notes call out "creativity in
+interview flow, reasoning, and interaction design" specifically — the plan panel already
+showed the agent's reasoning *before* a question, but the transcript gave no signal that a
+follow-up was a deliberate second probe rather than just the next question.
+
+**What was checked before building it:** whether a follow-up is derivable client-side from
+`meta.currentSlot` (it only advances on a real question change) — yes, so no backend
+change and no score/verdict crosses the wire. That mattered because `SCORING_GUIDE` has a
+deliberate rule that bluff/undersell detection must never surface mid-interview, only in
+the final report; this only shows *that* the agent chose to dig deeper, never *why*, so
+that rule stays intact.
+
+**Produced:** `web/app/page.tsx` (slot-tracking ref), `web/components/Transcript.tsx`
+("digging deeper" tag).
+
+**Verified live:** a vague answer on Day 7 drew a follow-up tagged "digging deeper" with a
+left accent border, distinct from a fresh question, no score visible.
+
+**Commit:** `bce4c6c`
+
+---
+
+### [12] 2026-08-09 — Premium UI pass: fonts, motion, cards
+**Author:** Jenish · **Tool:** Claude Code (Opus 5)
+
+**Prompt (verbatim, the first ask for this):**
+> now i think we should focus on the ui/ux [...] I want to give the user most premuim
+> experience as possible with mind blowing components, animations, transitions, card
+> structures, theme (like claude very aesthetic and premium with animated icons and button
+> theme [...]) [...] create a plan to meet this objective and implement that plan in tasks.
+
+**The font decision.** Asked to extract fonts from a specific GitHub repo
+(`slantie/qubits-learnova`). Checked before using: the two font families in that repo
+(Matter, SeasonMix) are commercial webfonts — PangramPangram's own FAQ states their free
+tier is personal-use-only, commercial license required; the referenced repo has no LICENSE
+file, granting no redistribution rights regardless of what its author personally licensed.
+Declined to copy the files into a public hackathon repo on that basis. Substituted
+Instrument Sans + Fraunces (`next/font/google`, both OFL) — same structural pairing
+(geometric sans + editorial serif) as Claude's own marketing site, verified live.
+
+**Produced:** `web/app/layout.tsx` (font pairing, `MotionConfig`), `web/app/globals.css`,
+`web/components/Transcript.tsx` (spark-glyph thinking indicator, blur-reveal), `web/
+components/Composer.tsx`, `web/components/Report.tsx`, `web/components/CandidatePicker.tsx`
+(icon + motion pass on every button and card).
+
+**A bug caught before shipping:** a card's left accent bar was built as an inset
+`box-shadow` with an X-offset and no blur/spread, which paints a thin ring around all four
+sides rather than one — confirmed live via screenshot, replaced with a real positioned
+element.
+
+**Commit:** `485a044`
+
+---
+
+### [13] 2026-08-09 — Theme toggle and a React Bits component
+**Author:** Jenish · **Tool:** Claude Code (Opus 5)
+
+**Prompt (verbatim):**
+> now i have restarted the claude and have rotated three api keys each with different
+> organizations and continue toward making this software as premium for user as possible
+
+React Bits MCP connected mid-session (`/mcp` reconnect). Searched its registry rather than
+building from scratch; declined most of it (BlobCursor, MetaBalls, ImageTrail — cursor and
+particle effects that would clash with the restrained aesthetic already built) and pulled
+exactly one component, `CountUp`, for the report's headline score reveal.
+
+**Two bugs found live, both before committing:** the theme toggle read only the explicit
+`data-theme` attribute to pick its icon, but `globals.css` falls back to
+`prefers-color-scheme` when that attribute is absent — on a system already in dark mode,
+the toggle showed the wrong icon for the actual rendered theme. And `CountUp`'s
+decimal-place inference used `n.toString()`, which drops to zero decimals for any whole
+number (`(0).toString()` is `"0"`, not `"0.0"`) — a score of exactly 0 rendered as a bare
+`0` instead of `0.0`, inconsistent with every other score on the page.
+
+**Produced:** `web/components/ThemeToggle.tsx`, `web/components/CountUp.tsx`,
+`web/app/layout.tsx` (`suppressHydrationWarning` for the theme-init script's intentional
+hydration mismatch).
+
+**Commit:** `9cf542f`
+
+---
+
+### [14] 2026-08-09 — Gap analysis against the actual reference sites
+**Author:** Jenish · **Tool:** Claude Code (Opus 5)
+
+**Prompt (verbatim):**
+> now i think we should focus on the ui/ux [...] i want you to reconsider the above prompt
+> and analyze it in depth as possible and list the requirements and the changes and their
+> reference that are asked [...] now rectify all your mistakes by first analyze create
+> tasks to achieve but this time correctly
+
+Loaded `claude.com/claude-for-chrome` and `claude.ai` live in Chrome (not `WebFetch`, which
+only sees static markup and can't show real hover/motion state) to check the actual
+reference rather than work from memory. Confirmed most of the aesthetic was already
+aligned; found three real, small gaps. Deliberately did not clone claude.ai's sidebar nav
+(Chats/Projects/Artifacts) — this product has no chat history or multi-project concept, so
+that nav would be empty chrome with nothing behind it.
+
+**Produced:** `web/components/CoveragePanel.tsx` (sidebar footer — built as the
+*interviewer's* identity, not the candidate's, since candidate identity already sits in
+the main header and repeating it would be redundant), `web/components/Composer.tsx` +
+`web/components/CandidatePicker.tsx` (icon pass on the last plain-text elements).
+
+**Commit:** `d4cb650`
+
+---
+
+### [15] 2026-08-09 — Redis-backed sessions for serverless
+**Author:** Jenish · **Tool:** Claude Code (Opus 5)
+
+**Prompt (verbatim):**
+> i want to deploy both on the vercel as i have verified it is taking 3-5 sec to answer
+> [...] now what to do next do we need domain also
+
+Flagged before deploying: sessions lived in an in-process dict (`app/store.py`), correct
+for one long-running container but not for serverless, where each request can land on a
+different, memory-isolated instance — a second turn could 404 with "Unknown sessionId" not
+because it's slow, because the memory genuinely isn't there. Offered three options; chose
+to fix it properly rather than accept the risk or fall back to Render alone.
+
+**Produced:** `app/store.py` (pluggable in-memory / Upstash Redis backend), `app/
+interviewer.py` (`Session.to_dict`/`from_dict`), `app/main.py` (lock moved from the Session
+object to the store, keyed by session id — a Redis-backed store hands back a fresh object
+per request, so there's no single instance to hold a `threading.Lock` on),
+`eval/run_eval.py` (concurrency test updated to match).
+
+**Verified before wiring in:** the `to_dict`/`from_dict` round-trip directly, offline, plus
+real client method signatures (`upstash_redis.Redis.set/get/delete/dbsize`) checked against
+the installed package rather than assumed.
+
+**Commit:** `302a402`
+
+---
+
+### [16] 2026-08-09 — The Vercel deploy actually failed, and why
+**Author:** Jenish · **Tool:** Claude Code (Opus 5)
+
+**Prompt (verbatim, across the debugging thread):**
+> this is the url https://Jenish-ab-talks.vercel.app but it is not working [...] can you
+> figure out why
+
+Backend returned FastAPI's own `{"detail":"Not Found"}` for every path tested — `/`,
+`/health`, `/api/candidates` alike, byte-identical. That ruled out a code crash (nothing
+in the app hard-requires an env var without a default) and pointed at routing. Built the
+original deploy against an older Vercel Python pattern (`api/index.py` + a
+rewrite-everything `vercel.json`); fetched Vercel's own docs live (dated 2026-07-22, not
+from memory) and found their current approach auto-detects a FastAPI `app` directly at
+conventional filenames, including `app/main.py` — which this repo already had. The custom
+entry point was fighting that auto-detection, not enabling it.
+
+**Produced:** deleted `api/index.py`; `vercel.json` replaced the rewrite with
+`functions.maxDuration` (also directly relevant — scoring calls run several seconds and can
+hit both a Groq attempt and an NVIDIA fallback in one request).
+
+A second, separate issue surfaced after the routing fix: CORS rejected the frontend's
+preflight because `CORS_ORIGINS` had been set to a specific origin that didn't exactly
+match. Fixed by reverting to `*` — the documented default, since the API has no auth and no
+cookies, and Vercel gives one project several valid origins (production, git-branch alias,
+per-deployment hash) that a single restricted value can't match anyway.
+
+**Commit:** `15763c6`
+
+---
+
+### [17] 2026-08-09 — README restructure
+**Author:** Jenish · **Tool:** Claude Code (Opus 5)
+
+**Prompt (verbatim):**
+> now can you update the prompt.md as i have to give the link of it make it properly
+> structured and organized and updated [...] i want you go to
+> "https://github.com/ridh21/RideBuddy" i want that exact readme file structure at the root
+
+Fetched the referenced repo's README via the GitHub API for exact structure (banner table,
+shield badges, anchored table of contents, emoji section headers, tables, horizontal
+rules) rather than eyeballing a summary. Rebuilt this repo's README into that structural
+pattern with this project's own content — no prose or project description copied from the
+reference, structure and formatting convention only.
+
+**Produced:** `README.md` (full restructure).
+
+**Commit:** `efdc51f`

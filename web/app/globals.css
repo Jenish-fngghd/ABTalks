@@ -1,7 +1,8 @@
 @import "tailwindcss";
 
-/* Light palette on bare :root, dark redefined under both the media query and an
-   explicit [data-theme]. No colour is ever defined only inside a media query. */
+/* Light is the default regardless of OS preference -- dark only applies when the
+   toggle explicitly sets data-theme="dark" (see ThemeToggle.tsx). No colour is
+   ever defined only inside a media query: both palettes are plain selectors. */
 :root {
   --bg: #f7f7f8;
   --panel: #ffffff;
@@ -16,24 +17,6 @@
   --warn: #a35b00;
   --bad: #b32d3a;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px rgb(0 0 0 / 0.06);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #0a0a0c;
-    --panel: #131316;
-    --panel-2: #191920;
-    --line: #26262e;
-    --text: #ececf1;
-    --muted: #9b9baa;
-    --faint: #62626f;
-    --accent: #8b85ff;
-    --accent-soft: #1b1a2e;
-    --good: #4ade80;
-    --warn: #fbbf24;
-    --bad: #f87171;
-    --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px rgb(0 0 0 / 0.35);
-  }
 }
 
 :root[data-theme="dark"] {

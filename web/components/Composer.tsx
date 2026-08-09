@@ -6,6 +6,64 @@ import { ANSWER_CHAR_LIMIT } from "@/lib/api";
 
 const WARN_AT = ANSWER_CHAR_LIMIT - 1000; // give a heads-up before the hard cutoff
 
+const QUICK_REPLIES: { text: string; label: string; icon: React.ReactNode }[] = [
+  {
+    text: "I don't know this one, honestly.",
+    label: "I don't know this one",
+    icon: (
+      <>
+        <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
+        <path
+          d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.7v.3"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+        />
+        <path d="M12 17.2h.01" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+      </>
+    ),
+  },
+  {
+    text: "Can you clarify the question?",
+    label: "Ask for clarification",
+    icon: (
+      <path
+        d="M4 5h16v11H8l-4 4V5z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    ),
+  },
+  {
+    text: "Could you rephrase the question?",
+    label: "Rephrase that",
+    icon: (
+      <path
+        d="M20 11A8 8 0 1 0 18.6 15.5M20 5v6h-6"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    ),
+  },
+  {
+    text: "I skipped this topic during the cohort.",
+    label: "I skipped this topic",
+    icon: (
+      <path
+        d="M5 5v14M8 6l10 6-10 6V6z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    ),
+  },
+];
+
 export function Composer({
   onSend,
   disabled,
@@ -22,11 +80,14 @@ export function Composer({
     if (!disabled) ref.current?.focus();
   }, [disabled]);
 
+  // No cap on the grown height and no scrollbar: the textarea always resizes to
+  // exactly fit its content, so overflow (and the scrollbar that comes with it)
+  // never triggers. Answers are already bounded by ANSWER_CHAR_LIMIT above.
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+    el.style.height = `${el.scrollHeight}px`;
   }, [value]);
 
   function submit() {
@@ -37,54 +98,37 @@ export function Composer({
   }
 
   return (
-    <div className="border-t border-line bg-panel px-5 py-4 sm:px-8">
-      {/* Optional nudges for a candidate who freezes rather than types nothing. Both
-          phrases are ordinary natural language the model already classifies (intent
-          "concede" / "clarify") -- these are a shortcut to typing them, not a new
-          code path. Hidden once they start typing so they never look like the only
-          two valid replies. */}
+    <div className="px-5 pb-5 pt-2 sm:px-8">
+      {/* Optional nudges for a candidate who freezes rather than types nothing. All
+          four are ordinary natural language the model already classifies (intent
+          "concede" / "clarify") -- shortcuts to typing them, not a new code path.
+          Hidden once they start typing so they never look like the only valid
+          replies. */}
       {!disabled && !value && (
-        <div className="mx-auto mb-2 flex max-w-2xl gap-2">
-          <motion.button
-            type="button"
-            onClick={() => onSend("I don't know this one, honestly.")}
-            whileHover={{ y: -1, borderColor: "var(--accent)" }}
-            whileTap={{ scale: 0.97 }}
-            className="flex items-center gap-1.5 rounded-full border border-line px-3 py-1 text-[12px] text-muted"
-          >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" className="shrink-0">
-              <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
-              <path
-                d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.7v.3"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-              />
-              <path d="M12 17.2h.01" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-            </svg>
-            I don't know this one
-          </motion.button>
-          <motion.button
-            type="button"
-            onClick={() => onSend("Can you clarify the question?")}
-            whileHover={{ y: -1, borderColor: "var(--accent)" }}
-            whileTap={{ scale: 0.97 }}
-            className="flex items-center gap-1.5 rounded-full border border-line px-3 py-1 text-[12px] text-muted"
-          >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" className="shrink-0">
-              <path
-                d="M4 5h16v11H8l-4 4V5z"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            Ask for clarification
-          </motion.button>
+        <div className="mx-auto mb-2 flex max-w-2xl flex-wrap gap-2">
+          {QUICK_REPLIES.map((q) => (
+            <motion.button
+              key={q.label}
+              type="button"
+              onClick={() => onSend(q.text)}
+              whileHover={{ y: -1, borderColor: "var(--accent)" }}
+              whileTap={{ scale: 0.97 }}
+              className="flex items-center gap-1.5 rounded-full border border-line px-3 py-1 text-[12px] text-muted"
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" className="shrink-0">
+                {q.icon}
+              </svg>
+              {q.label}
+            </motion.button>
+          ))}
         </div>
       )}
-      <div className="mx-auto flex max-w-2xl items-end gap-3">
+
+      {/* One bordered pill holding the whole composer -- no separate panel band
+          behind it, no boxed toolbar section. Matches the floating-input pattern
+          most chat products use (input reads as part of the conversation surface,
+          not a form bolted underneath it). */}
+      <div className="mx-auto flex max-w-2xl items-end gap-2 rounded-3xl border border-line bg-panel-2 py-2 pl-4 pr-2 shadow-sm transition-shadow focus-within:border-accent/50 focus-within:shadow-md">
         <textarea
           ref={ref}
           rows={1}
@@ -99,7 +143,9 @@ export function Composer({
           }}
           placeholder="Answer in your own words — specifics beat vocabulary…"
           aria-label="Your answer"
-          className="flex-1 resize-none rounded-xl border border-line bg-panel-2 px-4 py-3 text-[15px] leading-relaxed text-text placeholder:text-faint disabled:opacity-50"
+          // The pill itself already shows focus (focus-within:border-accent below) --
+          // the global *:focus-visible outline would double up on top of it here.
+          className="flex-1 resize-none overflow-hidden bg-transparent py-1.5 text-[15px] leading-relaxed text-text placeholder:text-faint focus:outline-none disabled:opacity-50"
         />
         <motion.button
           onClick={submit}
@@ -108,12 +154,12 @@ export function Composer({
           whileTap={!disabled && value.trim() ? { scale: 0.94 } : undefined}
           transition={{ type: "spring", stiffness: 500, damping: 30 }}
           aria-label="Send answer"
-          className="flex shrink-0 items-center justify-center rounded-full bg-accent p-3 text-white transition-opacity disabled:opacity-30"
+          className="flex shrink-0 items-center justify-center rounded-full bg-accent p-2.5 text-white transition-opacity disabled:opacity-30"
         >
           {disabled ? (
             <motion.svg
-              width="18"
-              height="18"
+              width="16"
+              height="16"
               viewBox="0 0 24 24"
               fill="none"
               animate={{ rotate: 360 }}
@@ -130,7 +176,7 @@ export function Composer({
               />
             </motion.svg>
           ) : (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
               <path
                 d="M12 19V5M12 5L6 11M12 5L18 11"
                 stroke="currentColor"

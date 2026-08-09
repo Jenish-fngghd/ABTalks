@@ -96,16 +96,35 @@ export function Report({
         transition={{ duration: 0.4 }}
         className="flex items-start justify-between gap-4"
       >
-        <div>
-          <p className="mono text-[11px] uppercase tracking-[0.16em] text-faint">
-            Interview complete
-          </p>
-          <h1 className="font-display mt-2 text-3xl font-medium tracking-tight sm:text-4xl">
-            {name}
-          </h1>
-          <p className="mt-1 text-[14px] text-muted">
-            {meta.questionsAsked} questions across {meta.daysCovered.length} curriculum days
-          </p>
+        <div className="flex items-start gap-3">
+          <motion.button
+            onClick={onRestart}
+            whileHover={{ x: -2 }}
+            whileTap={{ scale: 0.92 }}
+            aria-label="Back to candidates"
+            className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line text-muted transition-colors hover:text-text"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M19 12H5M12 19l-7-7 7-7"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </motion.button>
+          <div>
+            <p className="mono text-[11px] uppercase tracking-[0.16em] text-faint">
+              Interview complete
+            </p>
+            <h1 className="font-display mt-2 text-3xl font-medium tracking-tight sm:text-4xl">
+              {name}
+            </h1>
+            <p className="mt-1 text-[14px] text-muted">
+              {meta.questionsAsked} questions across {meta.daysCovered.length} curriculum days
+            </p>
+          </div>
         </div>
         <div className="flex shrink-0 items-center gap-3">
           <motion.button

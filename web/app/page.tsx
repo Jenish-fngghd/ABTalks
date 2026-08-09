@@ -202,9 +202,28 @@ export default function Page() {
       <CoveragePanel meta={meta} />
       <div className="flex min-h-dvh flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-line px-5 py-3.5 sm:px-8">
-          <div className="min-w-0">
-            <p className="truncate text-[14px] font-medium">{candidate?.member.name}</p>
-            <p className="truncate text-[12px] text-muted">{candidate?.member.jobRole}</p>
+          <div className="flex min-w-0 items-center gap-3">
+            <motion.button
+              onClick={restart}
+              whileHover={{ x: -2 }}
+              whileTap={{ scale: 0.92 }}
+              aria-label="Back to candidates"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line text-muted transition-colors hover:text-text"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M19 12H5M12 19l-7-7 7-7"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </motion.button>
+            <div className="min-w-0">
+              <p className="truncate text-[14px] font-medium">{candidate?.member.name}</p>
+              <p className="truncate text-[12px] text-muted">{candidate?.member.jobRole}</p>
+            </div>
           </div>
           <div className="flex shrink-0 items-center gap-3">
             <ThemeToggle />

@@ -12,16 +12,9 @@ export function ThemeToggle() {
   const [dark, setDark] = useState<boolean | null>(null);
 
   useEffect(() => {
-    // No explicit data-theme attribute doesn't mean "light" -- globals.css falls
-    // back to the OS preference via @media(prefers-color-scheme: dark) in that
-    // case, so the icon has to check the same thing or it desyncs from what's
-    // actually on screen (found live: page rendering dark, toggle still offering
-    // "switch to dark theme").
-    const explicit = document.documentElement.dataset.theme;
-    const isDark =
-      explicit === "dark" ||
-      (explicit !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
-    setDark(isDark);
+    // Light is the default regardless of OS preference (see globals.css) -- no
+    // data-theme attribute means light, full stop, not "check the OS instead".
+    setDark(document.documentElement.dataset.theme === "dark");
   }, []);
 
   function toggle() {
