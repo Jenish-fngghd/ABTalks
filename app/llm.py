@@ -35,8 +35,34 @@ def _client_once() -> Any:
     if _client is None:
         from openai import OpenAI
 
-        _client = OpenAI(base_url=BASE_URL, api_key=API_KEY, timeout=TIMEOUT)
+        # max_retries=0: the SDK's own built-in retry (2 attempts, 15-30s backoff
+        # apiece) was intercepting 429s before our own rotate-to-a-spare-key logic
+        # ever saw them -- a rate limit sat there retrying the SAME exhausted key
+        # for up to a minute instead of failing straight into the next key.
+        _client = OpenAI(base_url=BASE_URL, api_key=API_KEY, timeout=TIMEOUT, max_retries=0)
     return _client
+
+
+# Extra Groq keys from separate organizations -- unlike same-org keys (see the
+# comment on FALLBACK_* below), these have independent daily quotas, so rotating
+# to one on a rate limit actually buys headroom instead of hitting the same cap.
+_EXTRA_GROQ_KEYS = [
+    k for k in (os.getenv("GROQ_API_KEY_2", ""), os.getenv("GROQ_API_KEY_3", "")) if k
+]
+_extra_groq_clients: list[Any] = []
+
+
+def _extra_groq() -> list[Any]:
+    """Lazily built clients for the extra Groq keys, same base URL and model."""
+    global _extra_groq_clients
+    if not _extra_groq_clients and _EXTRA_GROQ_KEYS:
+        from openai import OpenAI
+
+        _extra_groq_clients = [
+            OpenAI(base_url=BASE_URL, api_key=k, timeout=TIMEOUT, max_retries=0)
+            for k in _EXTRA_GROQ_KEYS
+        ]
+    return _extra_groq_clients
 
 
 def _extract_json(text: str) -> str:
@@ -69,7 +95,7 @@ def _fallback() -> tuple[Any, str] | None:
         from openai import OpenAI
 
         _fallback_client = OpenAI(
-            base_url=FALLBACK_BASE_URL, api_key=FALLBACK_API_KEY, timeout=TIMEOUT
+            base_url=FALLBACK_BASE_URL, api_key=FALLBACK_API_KEY, timeout=TIMEOUT, max_retries=0
         )
     return _fallback_client, FALLBACK_MODEL
 
@@ -103,10 +129,21 @@ def structured_ex(
 
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
     active, active_model = client or _client_once(), model or MODEL
-    switched = False
+    # Rotation order: extra Groq keys (separate orgs, independent quotas) first,
+    # then the cross-provider fallback last -- a same-family retry is more likely
+    # to behave identically to the primary than switching providers outright.
+    spares = (
+        [(c, active_model) for c in _extra_groq()] + ([_fallback()] if _fallback() else [])
+        if client is None
+        else []
+    )
     last: Exception | None = None
+    # 3 attempts to get valid JSON, plus one shot per spare key/provider on top --
+    # a rate limit rotating through 3 keys should not eat into the JSON-retry
+    # budget the primary key gets.
+    max_attempts = 3 + len(spares)
 
-    for attempt in range(1, 4):
+    for attempt in range(1, max_attempts + 1):
         try:
             resp = active.chat.completions.create(
                 model=active_model,
@@ -116,16 +153,32 @@ def structured_ex(
             )
         except transient as exc:
             last = exc
-            if client is not None or switched:
+            if not spares:
                 raise
-            spare = _fallback()
-            if spare is None:
-                raise
-            active, active_model = spare
-            switched = True
+            active, active_model = spares.pop(0)
             continue
 
         raw = resp.choices[0].message.content or ""
+        # Observed live on the small open-weight model: an occasional garbled
+        # multi-byte character comes back as U+FFFD baked into otherwise-valid
+        # JSON -- a candidate reading "let�s move on" instead of "let's move
+        # on" in their question. Treated the same as a schema-validation miss:
+        # ask the model to resend cleanly rather than serving the replacement
+        # character to the transcript.
+        if "�" in raw:
+            last = ValueError("reply contained a corrupted (U+FFFD) character")
+            messages.append({"role": "assistant", "content": raw})
+            messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        "Your reply contained a garbled character. Resend the same "
+                        "JSON with clean text -- plain ASCII punctuation only, no "
+                        "special quote or dash characters."
+                    ),
+                }
+            )
+            continue
         try:
             return model_cls.model_validate_json(_extract_json(raw)), attempt
         except (ValidationError, ValueError) as exc:
