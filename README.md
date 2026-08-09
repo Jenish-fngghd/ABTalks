@@ -239,8 +239,6 @@ app/
   interviewer.py  the loop: prompts, turn handling, follow-up policy, report
   llm.py          OpenAI-compatible client + offline stand-in
   store.py        session store -- in-memory, or Redis if UPSTASH_* is set
-api/
-  index.py        Vercel Python entry point; re-exports app.main:app
 eval/
   run_eval.py     personas + assertions
   bench_models.py cross-provider model comparison on this task
@@ -251,7 +249,9 @@ web/
 data/             curriculum.json, candidates.json
 Dockerfile        backend image for Render (single worker, deliberately)
 render.yaml       Render deploy config
-vercel.json       routes every path to api/index.py, for the Vercel backend deploy
+vercel.json       maxDuration for the FastAPI function, for the Vercel backend deploy.
+                  No custom entry point needed -- app/main.py already matches Vercel's
+                  auto-detected FastAPI convention.
 ```
 
 Domain logic imports without a server running, which is what makes the eval cheap.
@@ -285,9 +285,10 @@ Backend has two supported paths:
 - **Render** (`Dockerfile`, `render.yaml`) — a normal long-running container. Sessions live
   in an in-memory dict (`app/store.py`), so it runs with **one worker**; a redeploy drops
   in-flight interviews, and a second worker would not see the first's sessions.
-- **Vercel** (`api/index.py`, `vercel.json`) — as a second Vercel project with its root
-  directory set to the repo root (not `web`). Requires switching `store.py` to its Redis
-  backend first: set `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` (free tier at
+- **Vercel** — as a second Vercel project with its root directory set to the repo root
+  (not `web`). Vercel auto-detects the FastAPI `app` at `app/main.py` directly; no custom
+  entry point or rewrite is needed. Requires switching `store.py` to its Redis backend
+  first: set `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` (free tier at
   upstash.com). Serverless instances don't share memory with each other, so the in-memory
   store silently loses sessions across instances on Vercel specifically — Render's single
   container never has this problem, which is why it stays the default recommendation.
