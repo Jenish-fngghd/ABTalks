@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  <strong>Live demo:</strong> <a href="https://ab-talks-sigma.vercel.app">ab-talks-sigma.vercel.app</a>
+  <strong>Live demo:</strong> <a href="https://jenish-ab-talks.vercel.app/">ab-talks-sigma.vercel.app</a>
   &nbsp;·&nbsp;
   <strong>AI usage log:</strong> <a href="PROMPTS.md">PROMPTS.md</a>
   &nbsp;·&nbsp;
