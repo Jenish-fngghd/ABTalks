@@ -293,7 +293,10 @@ function CandidateCard({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.96 }}
-      transition={{ duration: 0.25, delay: Math.min(i * 0.02, 0.3) }}
+      transition={{
+        layout: { duration: 0.2, ease: [0.32, 0.72, 0, 1] },
+        default: { duration: 0.15, delay: Math.min(i * 0.012, 0.12) },
+      }}
       whileHover={busy ? undefined : { y: -2 }}
       whileTap={busy ? undefined : { scale: 0.99 }}
       disabled={busy}
