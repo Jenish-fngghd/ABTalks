@@ -77,3 +77,24 @@ export async function post(
   }
   return res.json();
 }
+
+export type ReportSummary = {
+  sessionId: string;
+  name: string;
+  jobRole: string;
+  completedAt: number | null;
+  meta: Meta;
+  feedback: Feedback;
+};
+
+// GET /api/reports -- not part of technical-spec.md, purely additive. Backed by
+// store.list_completed(), so it only exists (and only stays populated) as long as
+// the backend's session store does -- in-memory sessions vanish on redeploy, and
+// even Redis-backed ones expire after MAX_AGE_SECONDS. An empty list here just
+// means "nothing recent", not a broken endpoint.
+export async function getReports(): Promise<ReportSummary[]> {
+  const res = await fetch(`${API_URL}/api/reports`);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.reports ?? [];
+}

@@ -9,6 +9,7 @@ wishes, and keeps the transcript explainable after the fact.
 
 from __future__ import annotations
 
+import time
 from dataclasses import asdict
 from typing import Any
 
@@ -164,6 +165,9 @@ class Session:
         self.clarifications = 0
         self.done = False
         self.feedback: Feedback | None = None
+        # Set once, when `done` flips true -- lets the reports list (§ store.py
+        # list_completed) sort by recency without a second store just for that.
+        self.completed_at: float | None = None
 
     # --- (de)serialization for store.py -----------------------------------
     # The double-submit lock used to live on the instance (a threading.Lock),
@@ -184,6 +188,7 @@ class Session:
             "clarifications": self.clarifications,
             "done": self.done,
             "feedback": self.feedback.model_dump() if self.feedback else None,
+            "completedAt": self.completed_at,
         }
 
     @classmethod
@@ -199,6 +204,7 @@ class Session:
         self.clarifications = data["clarifications"]
         self.done = data["done"]
         self.feedback = Feedback(**data["feedback"]) if data["feedback"] else None
+        self.completed_at = data.get("completedAt")
         return self
 
     # --- introspection used by the API `meta` block and the UI ---------------
@@ -451,6 +457,7 @@ class Session:
         advance = forced_advance or conceded or result.action == "advance" or next_q is None
         if advance and next_q is None:
             self.done = True
+            self.completed_at = time.time()
             self.feedback = self._report()
             return result.reply, True
 

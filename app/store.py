@@ -67,6 +67,12 @@ class _MemoryStore:
         with self._lock:
             return len(self._sessions)
 
+    def list_completed(self, limit: int) -> list[Session]:
+        with self._lock:
+            done = [s for _, s in self._sessions.values() if s.done]
+        done.sort(key=lambda s: s.completed_at or 0, reverse=True)
+        return done[:limit]
+
     def acquire_lock(self, session_id: str) -> bool:
         with self._lock:
             turn_lock = self._turn_locks.setdefault(session_id, threading.Lock())
@@ -117,6 +123,27 @@ class _RedisStore:
         except Exception:
             return -1
 
+    def list_completed(self, limit: int) -> list[Session]:
+        import json
+
+        # KEYS is O(n) on the whole keyspace, which is a real problem at production
+        # scale -- fine here: MAX_SESSIONS caps this at 500, and this endpoint backs
+        # a hackathon demo's homepage list, not a high-traffic path. SCAN would be
+        # the correct choice past that point.
+        keys = self._r.keys(self._key("*"))
+        if not keys:
+            return []
+        raw_values = self._r.mget(*keys)
+        sessions = []
+        for raw in raw_values:
+            if raw is None:
+                continue
+            s = Session.from_dict(json.loads(raw))
+            if s.done:
+                sessions.append(s)
+        sessions.sort(key=lambda s: s.completed_at or 0, reverse=True)
+        return sessions[:limit]
+
     def acquire_lock(self, session_id: str) -> bool:
         # SET ... NX EX: succeeds only if the key does not already exist. That
         # atomicity is what makes this safe across concurrent instances --
@@ -143,6 +170,11 @@ def get(session_id: str) -> Session | None:
 
 def count() -> int:
     return _store.count()
+
+
+def list_completed(limit: int = 20) -> list[Session]:
+    """Most recently completed interviews, newest first."""
+    return _store.list_completed(limit)
 
 
 def acquire_lock(session_id: str) -> bool:

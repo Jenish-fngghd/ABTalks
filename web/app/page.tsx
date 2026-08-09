@@ -9,7 +9,15 @@ import { CoveragePanel } from "@/components/CoveragePanel";
 import { Report } from "@/components/Report";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Transcript, type Message } from "@/components/Transcript";
-import { API_URL, post, type Candidate, type Feedback, type Meta } from "@/lib/api";
+import {
+  API_URL,
+  getReports,
+  post,
+  type Candidate,
+  type Feedback,
+  type Meta,
+  type ReportSummary,
+} from "@/lib/api";
 
 type Phase = "picking" | "interview" | "report";
 
@@ -47,6 +55,11 @@ export default function Page() {
   const [phase, setPhase] = useState<Phase>("picking");
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [candidate, setCandidate] = useState<Candidate | null>(null);
+  // Name shown on the report screen. Separate from candidate.member.name because a
+  // reopened past report never had a full Candidate object fetched for it -- only
+  // what /api/reports already returned.
+  const [reportName, setReportName] = useState("");
+  const [reports, setReports] = useState<ReportSummary[]>([]);
   const [sessionId, setSessionId] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [meta, setMeta] = useState<Meta | null>(null);
@@ -92,6 +105,17 @@ export default function Page() {
       .then((r) => r.json())
       .then((d) => setCandidates(d.candidates ?? []))
       .catch(() => setError("Could not reach the interview API. Is the backend running?"));
+    // Best-effort: an empty or failed reports fetch just means the "Recent
+    // reports" section doesn't render (see CandidatePicker) -- never blocks or
+    // errors the picker itself.
+    getReports().then(setReports);
+  }, []);
+
+  const openReport = useCallback((r: ReportSummary) => {
+    setReportName(r.name);
+    setMeta(r.meta);
+    setFeedback(r.feedback);
+    setPhase("report");
   }, []);
 
   const start = useCallback(async (c: Candidate) => {
@@ -101,6 +125,7 @@ export default function Page() {
     try {
       const res = await post({ sessionId: id, candidate: c });
       setCandidate(c);
+      setReportName(c.member.name);
       setSessionId(id);
       setMeta(res.meta ?? null);
       prevSlotRef.current = res.meta?.currentSlot ?? null;
@@ -171,27 +196,30 @@ export default function Page() {
     sessionStorage.removeItem(STORAGE_KEY);
     setPhase("picking");
     setCandidate(null);
+    setReportName("");
     setMessages([]);
     setMeta(null);
     setFeedback(null);
     setError(null);
+    // A completed interview just now would not appear in the list fetched on
+    // mount -- refresh so it shows up without a full page reload.
+    getReports().then(setReports);
   }, []);
 
-  if (phase === "report" && feedback && meta && candidate) {
-    return (
-      <Report
-        feedback={feedback}
-        meta={meta}
-        name={candidate.member.name}
-        onRestart={restart}
-      />
-    );
+  if (phase === "report" && feedback && meta) {
+    return <Report feedback={feedback} meta={meta} name={reportName} onRestart={restart} />;
   }
 
   if (phase === "picking") {
     return (
       <>
-        <CandidatePicker candidates={candidates} onPick={start} busy={busy} />
+        <CandidatePicker
+          candidates={candidates}
+          reports={reports}
+          onPick={start}
+          onOpenReport={openReport}
+          busy={busy}
+        />
         <ErrorBar error={error} />
       </>
     );

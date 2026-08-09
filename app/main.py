@@ -62,6 +62,32 @@ def candidates() -> dict[str, object]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+@app.get("/api/reports")
+def reports() -> dict[str, object]:
+    """Most recently completed interviews, for the picker's "Recent reports" list.
+
+    Not part of the spec -- purely additive. Explicitly limited to `done` sessions:
+    an in-progress interview reopened from here would let a candidate answer out of
+    order via a second tab, and the problem statement puts persistent accounts and
+    long-term history out of scope, so this reads as "recently finished", not as a
+    resumable session browser.
+    """
+    out = []
+    for s in store.list_completed():
+        assert s.feedback is not None  # only ever true for done sessions
+        out.append(
+            {
+                "sessionId": s.id,
+                "name": s.candidate.get("member", {}).get("name", "Unknown"),
+                "jobRole": s.candidate.get("member", {}).get("jobRole", ""),
+                "completedAt": s.completed_at,
+                "meta": s.meta(),
+                "feedback": s.feedback.model_dump(),
+            }
+        )
+    return {"reports": out}
+
+
 @app.post("/api/interview", response_model=InterviewResponse, response_model_exclude_none=True)
 def interview(req: InterviewRequest) -> InterviewResponse:
     session = store.get(req.sessionId)
