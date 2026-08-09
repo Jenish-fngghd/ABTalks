@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { CandidatePicker } from "@/components/CandidatePicker";
 import { Composer } from "@/components/Composer";
@@ -58,6 +58,11 @@ export default function Page() {
   // same request fails again forever -- so it gets its own recovery action
   // instead of being offered a "Retry" that can never succeed.
   const [sessionLost, setSessionLost] = useState(false);
+  // Whether the just-appended interviewer line is a follow-up on the current slot
+  // or a fresh question is derivable client-side from meta.currentSlot alone (it
+  // only advances on a real question change) -- no backend change needed, and no
+  // score/verdict crosses the wire, so "never coach mid-interview" still holds.
+  const prevSlotRef = useRef<number | null>(null);
 
   // Restore an in-progress interview after a refresh. There is no safe way to ask
   // the backend "what state is this session in" -- the one endpoint would consume
@@ -70,6 +75,7 @@ export default function Page() {
     setSessionId(snap.sessionId);
     setMessages(snap.messages);
     setMeta(snap.meta);
+    prevSlotRef.current = snap.meta?.currentSlot ?? null;
     setFeedback(snap.feedback);
     setPhase(snap.phase);
   }, []);
@@ -96,6 +102,7 @@ export default function Page() {
       setCandidate(c);
       setSessionId(id);
       setMeta(res.meta ?? null);
+      prevSlotRef.current = res.meta?.currentSlot ?? null;
       setMessages([
         { role: "interviewer", text: res.reply, day: res.meta?.plan[0]?.day },
       ]);
@@ -116,15 +123,18 @@ export default function Page() {
       setError(null);
       setFailedText(null);
       setSessionLost(false);
+      const prevSlot = prevSlotRef.current;
       try {
         const res = await post({ sessionId, message: text });
         setMeta(res.meta ?? null);
+        prevSlotRef.current = res.meta?.currentSlot ?? null;
         setMessages((m) => [
           ...m,
           {
             role: "interviewer",
             text: res.reply,
             day: res.meta?.plan[res.meta.currentSlot]?.day,
+            followup: prevSlot !== null && res.meta?.currentSlot === prevSlot,
           },
         ]);
         if (res.done && res.feedback) {

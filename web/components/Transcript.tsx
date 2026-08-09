@@ -3,7 +3,15 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef } from "react";
 
-export type Message = { role: "interviewer" | "candidate"; text: string; day?: number };
+export type Message = {
+  role: "interviewer" | "candidate";
+  text: string;
+  day?: number;
+  // Derived client-side from whether meta.currentSlot advanced -- true when this
+  // line is a second probe on the same question rather than a new one. Carries no
+  // score or verdict, only the fact that the agent chose to dig deeper.
+  followup?: boolean;
+};
 
 export function Transcript({
   messages,
@@ -35,10 +43,15 @@ export function Transcript({
               className={m.role === "candidate" ? "flex justify-end" : ""}
             >
               {m.role === "interviewer" ? (
-                <div>
+                <div className={m.followup ? "border-l-2 border-accent/40 pl-3" : undefined}>
                   {m.day !== undefined && (
-                    <div className="mono mb-1.5 text-[11px] uppercase tracking-wider text-faint">
-                      Day {m.day}
+                    <div className="mono mb-1.5 flex items-center gap-2 text-[11px] uppercase tracking-wider text-faint">
+                      <span>Day {m.day}</span>
+                      {m.followup && (
+                        <span className="rounded-full bg-accent/15 px-1.5 py-0.5 text-accent">
+                          digging deeper
+                        </span>
+                      )}
                     </div>
                   )}
                   <p className="text-[15px] leading-relaxed text-text">{m.text}</p>
