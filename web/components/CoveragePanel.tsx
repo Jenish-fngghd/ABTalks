@@ -33,7 +33,7 @@ export function CoveragePanel({ meta }: { meta: Meta | null }) {
 
   return (
     <aside
-      className="relative flex w-full shrink-0 flex-col gap-5 overflow-hidden border-line bg-panel p-5 lg:h-dvh lg:w-[340px] lg:overflow-y-auto lg:border-r"
+      className="relative flex w-full shrink-0 flex-col gap-5 overflow-hidden border-line bg-panel p-5 lg:sticky lg:top-0 lg:h-dvh lg:w-[340px] lg:overflow-y-auto lg:border-r"
       aria-label="Interview plan and coverage"
     >
       {/* A quiet accent wash at the top of the panel -- the flat-panel version read

@@ -1,7 +1,14 @@
 "use client";
 
-import { AnimatePresence, motion } from "motion/react";
-import { useMemo, useState } from "react";
+import {
+  AnimatePresence,
+  motion,
+  useMotionTemplate,
+  useMotionValue,
+  useReducedMotion,
+  useSpring,
+} from "motion/react";
+import { useMemo, useState, type MouseEvent } from "react";
 import { FilterChips } from "@/components/FilterChips";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import type { Candidate, ReportSummary } from "@/lib/api";
@@ -224,63 +231,119 @@ export function CandidatePicker({
 
       <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <AnimatePresence mode="popLayout">
-          {filtered.map((c, i) => {
-            const p = posture(c);
-            const skipped = c.missions.filter((m) => m.skipped).length;
-            const struggled = c.missions.filter((m) => (m.attempts ?? 0) >= 3).length;
-            return (
-              <motion.button
-                key={c.member.id}
-                layout
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.96 }}
-                transition={{ duration: 0.25, delay: Math.min(i * 0.02, 0.3) }}
-                whileHover={busy ? undefined : { y: -2 }}
-                whileTap={busy ? undefined : { scale: 0.99 }}
-                disabled={busy}
-                onClick={() => onPick(c)}
-                className="group relative overflow-hidden rounded-xl border border-line bg-panel p-4 text-left shadow-sm transition-shadow hover:shadow-lg disabled:opacity-40"
-              >
-                {/* Left accent bar in the posture colour -- a real positioned element,
-                    not a box-shadow trick (an inset offset shadow with no blur/spread
-                    paints a thin ring around all four sides, not just one). */}
-                <span
-                  aria-hidden
-                  className="absolute inset-y-0 left-0 w-[3px] rounded-l-xl"
-                  style={{ background: p.color }}
-                />
-                {/* A soft sheen following the posture colour -- visible only on hover,
-                    so the card reads as crafted rather than a flat bordered box. */}
-                <div
-                  aria-hidden
-                  className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full opacity-0 blur-2xl transition-opacity duration-300 group-hover:opacity-20"
-                  style={{ background: p.color }}
-                />
-                <div className="flex items-baseline justify-between gap-3">
-                  <span className="truncate text-[15px] font-medium">{c.member.name}</span>
-                  <span
-                    className="mono flex shrink-0 items-center gap-1 text-[10px] uppercase tracking-wider"
-                    style={{ color: p.color }}
-                  >
-                    <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ background: p.color }} />
-                    {p.label}
-                  </span>
-                </div>
-                <p className="mt-0.5 truncate text-[13px] text-muted">
-                  {c.member.jobRole} · {c.member.yearsExperience}y
-                </p>
-                <p className="mono mt-2.5 text-[11px] text-faint">
-                  {c.signals.missionsFirstTry}/{c.signals.missionsCompleted} first try
-                  {struggled > 0 && ` · ${struggled} struggled`}
-                  {skipped > 0 && ` · ${skipped} skipped`}
-                </p>
-              </motion.button>
-            );
-          })}
+          {filtered.map((c, i) => (
+            <CandidateCard key={c.member.id} candidate={c} index={i} busy={busy} onPick={onPick} />
+          ))}
         </AnimatePresence>
       </div>
     </main>
+  );
+}
+
+// Pointer-tracked tilt + glare, adapted from React Bits' ProfileCard
+// (registry @react-bits, MIT, via the shadcn MCP) -- that component is a
+// single hero card (holographic avatar layer, fixed 540px height, a
+// requestAnimationFrame tilt engine with inertia) built for one photo, not a
+// dense 20-card grid. What's reused here is only the pointer-percent math
+// (rotateX/Y and a glare radial-gradient positioned at the pointer) driven by
+// a Framer Motion spring instead of a RAF loop, since a single settle spring
+// per card is cheap enough for a full grid where 20 parallel RAF engines
+// would not be.
+function CandidateCard({
+  candidate: c,
+  index: i,
+  busy,
+  onPick,
+}: {
+  candidate: Candidate;
+  index: number;
+  busy: boolean;
+  onPick: (c: Candidate) => void;
+}) {
+  const p = posture(c);
+  const skipped = c.missions.filter((m) => m.skipped).length;
+  const struggled = c.missions.filter((m) => (m.attempts ?? 0) >= 3).length;
+  const reduced = useReducedMotion();
+
+  const rotateX = useSpring(useMotionValue(0), { stiffness: 300, damping: 22 });
+  const rotateY = useSpring(useMotionValue(0), { stiffness: 300, damping: 22 });
+  const glareX = useMotionValue(50);
+  const glareY = useMotionValue(50);
+  const glareBackground = useMotionTemplate`radial-gradient(circle at ${glareX}% ${glareY}%, color-mix(in srgb, ${p.color} 18%, transparent) 0%, transparent 60%)`;
+
+  function onMouseMove(e: MouseEvent<HTMLButtonElement>) {
+    if (reduced || busy) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const px = ((e.clientX - rect.left) / rect.width) * 100;
+    const py = ((e.clientY - rect.top) / rect.height) * 100;
+    rotateY.set(((px - 50) / 50) * 6);
+    rotateX.set((-(py - 50) / 50) * 6);
+    glareX.set(px);
+    glareY.set(py);
+  }
+
+  function onMouseLeave() {
+    rotateX.set(0);
+    rotateY.set(0);
+  }
+
+  return (
+    <motion.button
+      layout
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.96 }}
+      transition={{ duration: 0.25, delay: Math.min(i * 0.02, 0.3) }}
+      whileHover={busy ? undefined : { y: -2 }}
+      whileTap={busy ? undefined : { scale: 0.99 }}
+      disabled={busy}
+      onClick={() => onPick(c)}
+      onMouseMove={onMouseMove}
+      onMouseLeave={onMouseLeave}
+      style={reduced ? undefined : { rotateX, rotateY, transformPerspective: 700 }}
+      className="group relative overflow-hidden rounded-xl border border-line bg-panel p-4 text-left shadow-sm transition-shadow hover:shadow-lg disabled:opacity-40"
+    >
+      {/* Left accent bar in the posture colour -- a real positioned element,
+          not a box-shadow trick (an inset offset shadow with no blur/spread
+          paints a thin ring around all four sides, not just one). */}
+      <span
+        aria-hidden
+        className="absolute inset-y-0 left-0 w-[3px] rounded-l-xl"
+        style={{ background: p.color }}
+      />
+      {/* A soft sheen following the posture colour -- visible only on hover,
+          so the card reads as crafted rather than a flat bordered box. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full opacity-0 blur-2xl transition-opacity duration-300 group-hover:opacity-20"
+        style={{ background: p.color }}
+      />
+      {!reduced && (
+        <motion.div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 rounded-xl opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+          style={{ background: glareBackground }}
+        />
+      )}
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="truncate text-[15px] font-medium">{c.member.name}</span>
+        <span
+          className="mono flex shrink-0 items-center gap-1 text-[10px] uppercase tracking-wider"
+          style={{ color: p.color }}
+        >
+          <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ background: p.color }} />
+          {p.label}
+        </span>
+      </div>
+      <p className="mt-0.5 truncate text-[13px] text-muted">
+        {c.member.jobRole} · {c.member.yearsExperience}y
+      </p>
+      <p className="mono mt-2.5 text-[11px] text-faint">
+        {c.signals.missionsFirstTry}/{c.signals.missionsCompleted} first try
+        {struggled > 0 && ` · ${struggled} struggled`}
+        {skipped > 0 && ` · ${skipped} skipped`}
+      </p>
+    </motion.button>
   );
 }
 

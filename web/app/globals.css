@@ -79,7 +79,12 @@ body {
   color: #fff;
 }
 
-*:focus-visible {
+/* Excludes text inputs/textareas: those already show focus via their own
+   border/shadow transition (see Composer.tsx, CandidatePicker.tsx search
+   input), so this outline was doubling up on top of that -- same specificity
+   as Tailwind's focus:outline-none, and this rule loads later, so it always
+   won regardless of the class. */
+*:focus-visible:not(input, textarea) {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: 4px;
