@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "motion/react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import type { Candidate } from "@/lib/api";
 
 /** Same rule as the backend's Posture: how they learned, not just what they finished. */
@@ -24,7 +25,15 @@ export function CandidatePicker({
 }) {
   return (
     <main className="mx-auto max-w-3xl px-5 py-12 sm:px-8 sm:py-16">
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+      <div className="flex justify-end">
+        <ThemeToggle />
+      </div>
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="mt-2"
+      >
         <h1 className="font-display text-3xl font-medium tracking-tight sm:text-4xl">
           AI Interview Agent
         </h1>

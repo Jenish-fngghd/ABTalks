@@ -7,6 +7,7 @@ import { CandidatePicker } from "@/components/CandidatePicker";
 import { Composer } from "@/components/Composer";
 import { CoveragePanel } from "@/components/CoveragePanel";
 import { Report } from "@/components/Report";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Transcript, type Message } from "@/components/Transcript";
 import { API_URL, post, type Candidate, type Feedback, type Meta } from "@/lib/api";
 
@@ -205,21 +206,24 @@ export default function Page() {
             <p className="truncate text-[14px] font-medium">{candidate?.member.name}</p>
             <p className="truncate text-[12px] text-muted">{candidate?.member.jobRole}</p>
           </div>
-          <motion.button
-            onClick={restart}
-            whileHover={{ opacity: 1 }}
-            className="mono flex shrink-0 items-center gap-1.5 text-[12px] text-muted opacity-80 transition-colors hover:text-text"
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M18 6L6 18M6 6l12 12"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-              />
-            </svg>
-            End
-          </motion.button>
+          <div className="flex shrink-0 items-center gap-3">
+            <ThemeToggle />
+            <motion.button
+              onClick={restart}
+              whileHover={{ opacity: 1 }}
+              className="mono flex items-center gap-1.5 text-[12px] text-muted opacity-80 transition-colors hover:text-text"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M18 6L6 18M6 6l12 12"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+              </svg>
+              End
+            </motion.button>
+          </div>
         </header>
         <Transcript
           messages={messages}

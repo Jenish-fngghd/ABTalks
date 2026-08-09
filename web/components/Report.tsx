@@ -2,6 +2,8 @@
 
 import { motion } from "motion/react";
 import { useState } from "react";
+import { CountUp } from "@/components/CountUp";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import type { Feedback, Meta } from "@/lib/api";
 
 function toMarkdown(name: string, feedback: Feedback, meta: Meta, overall: number, comms?: number): string {
@@ -105,42 +107,45 @@ export function Report({
             {meta.questionsAsked} questions across {meta.daysCovered.length} curriculum days
           </p>
         </div>
-        <motion.button
-          onClick={copyReport}
-          whileHover={{ y: -1 }}
-          whileTap={{ scale: 0.97 }}
-          className="mono flex shrink-0 items-center gap-1.5 rounded-lg border border-line bg-panel px-3 py-2 text-[12px] text-muted transition-colors hover:bg-panel-2"
-        >
-          <motion.svg
-            width="13"
-            height="13"
-            viewBox="0 0 24 24"
-            fill="none"
-            initial={false}
-            animate={copied ? { scale: [1, 1.3, 1] } : {}}
-            transition={{ duration: 0.35 }}
+        <div className="flex shrink-0 items-center gap-3">
+          <motion.button
+            onClick={copyReport}
+            whileHover={{ y: -1 }}
+            whileTap={{ scale: 0.97 }}
+            className="mono flex items-center gap-1.5 rounded-lg border border-line bg-panel px-3 py-2 text-[12px] text-muted transition-colors hover:bg-panel-2"
           >
-            {copied ? (
-              <path
-                d="M4 12l5 5L20 6"
-                stroke="var(--good)"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            ) : (
-              <>
-                <rect x="8" y="8" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.8" />
+            <motion.svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              initial={false}
+              animate={copied ? { scale: [1, 1.3, 1] } : {}}
+              transition={{ duration: 0.35 }}
+            >
+              {copied ? (
                 <path
-                  d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
+                  d="M4 12l5 5L20 6"
+                  stroke="var(--good)"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                 />
-              </>
-            )}
-          </motion.svg>
-          {copied ? "Copied" : "Copy report"}
-        </motion.button>
+              ) : (
+                <>
+                  <rect x="8" y="8" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.8" />
+                  <path
+                    d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                  />
+                </>
+              )}
+            </motion.svg>
+            {copied ? "Copied" : "Copy report"}
+          </motion.button>
+          <ThemeToggle />
+        </div>
       </motion.header>
 
       <motion.section
@@ -159,13 +164,19 @@ export function Report({
         />
         <div className="flex items-end gap-4">
           <motion.span
-            className="mono text-5xl font-semibold tabular-nums"
-            style={{ color: tone(overall) }}
             initial={{ opacity: 0, scale: 0.94 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.45, delay: 0.2, ease: [0.32, 0.72, 0, 1] }}
+            transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
           >
-            {overall.toFixed(1)}
+            <CountUp
+              to={overall}
+              from={0}
+              decimals={1}
+              delay={0.2}
+              duration={1.1}
+              className="mono text-5xl font-semibold tabular-nums"
+              style={{ color: tone(overall) }}
+            />
           </motion.span>
           <span className="mono pb-1.5 text-sm text-faint">/ 5.0 knowledge</span>
           {comms !== undefined && (
