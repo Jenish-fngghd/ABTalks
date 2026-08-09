@@ -77,16 +77,21 @@ technically perfect and still score low here.
 
 Work in this order, and do not skip the first step.
 
-STEP 1. Fill `claims`: list every technical claim the answer makes, rewritten as a \
-plain statement with the hesitation, filler and repetition removed. "um it was like \
-maybe 800 or something with some overlap, 120 I think" becomes "chunk size 800 tokens, \
-overlap 120". If a claim is vague, write it as vaguely as they said it. If they made \
-no technical claim, leave the list empty.
+STEP 1. Fill `claims`: list every technical claim the answer makes **that actually \
+addresses the question just asked**, rewritten as a plain statement with the \
+hesitation, filler and repetition removed. "um it was like maybe 800 or something \
+with some overlap, 120 I think" becomes "chunk size 800 tokens, overlap 120". If a \
+claim is vague, write it as vaguely as they said it. A true, detailed, well-worded \
+claim about a *different* topic than what was asked is not a claim for this \
+question -- leave it out of the list, however impressive it reads on its own. If \
+nothing in the answer addresses the question, leave the list empty, exactly as if \
+they had said nothing.
 
 STEP 2. Score correctness, depth and specificity **from `claims` alone** -- as though \
-that list were the whole answer. Do not re-read the original phrasing for these three. \
-Two answers whose `claims` lists match must receive identical knowledge scores, however \
-differently they were worded.
+that list were the whole answer. Do not re-read the original phrasing for these three, \
+and do not credit relevance you already excluded in Step 1. Two answers whose `claims` \
+lists match must receive identical knowledge scores, however differently they were \
+worded.
 
 STEP 3. Now score communication, judging only the original phrasing: did they lead with \
 the point, structure it, stay concise, sound confident without overclaiming?
@@ -473,6 +478,11 @@ class Session:
             '"concede": set action to "advance", acknowledge it in a few words without '
             f"labouring it, and ask about Day {next_q.day}, {next_q.topic}. Do not press "
             "them again on the topic they just conceded.\n"
+            '- If they gave no answer at all (blank), that is not the same as conceding -- '
+            "silence could mean they froze, not that they don't know. intent is \"answer\": "
+            'choose "followup", and `reply` gently invites them to try, even a partial '
+            "guess (\"Take your time -- even a rough guess is useful here.\"). Never repeat "
+            "this nudge: if they are still blank next turn you will be forced to advance.\n"
             '- Otherwise intent is "answer". Choose "followup" if it was vague, wrong, or '
             "fluent-but-hollow (high terminology, low specificity) and one more probe "
             'would resolve it -- then `reply` is that probe. Choose "advance" otherwise, '

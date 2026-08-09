@@ -89,15 +89,24 @@ def check(session: Session, persona: str) -> list[str]:
         fails.append(f"only {len(session.days_covered)} days (need {MIN_DAYS})")
     if len({p.module for p in session.plan}) < 3:
         fails.append("plan spans fewer than 3 modules")
+    avg = sum(session.scores) / len(session.scores) if session.scores else 0.0
     fb = session.feedback
     if fb is None:
         fails.append("no feedback produced")
     else:
         if not fb.summary.strip():
             fails.append("empty feedback summary")
-        for field in ("strengths", "gaps", "next"):
+        for field in ("gaps", "next"):
             if not getattr(fb, field):
                 fails.append(f"feedback.{field} is empty")
+        # A candidate who scored low genuinely has nothing to praise -- only a real
+        # strong showing that gets no credit is a bug worth flagging. The relevance
+        # gate (interviewer.py SCORING_GUIDE step 1) is a single LLM judgement, not
+        # perfect on every turn, so a middling average from a mostly-off-topic answer
+        # is expected and not itself a defect -- 2.5 keeps this catching only a
+        # genuinely good answer that got no credit.
+        if not fb.strengths and avg >= 2.5:
+            fails.append(f"feedback.strengths is empty despite avg score {avg:.2f}")
     # A candidate who only ever asks questions back must still reach the end, and
     # a clarification must never be scored as if it were an answer.
     if persona == "confused":
@@ -113,8 +122,10 @@ def check(session: Session, persona: str) -> list[str]:
     followups = sum(1 for t in session.turns if t.is_followup)
     if persona in ("weak", "bluffer", "silent") and followups == 0:
         fails.append(f"no follow-up asked for the {persona} persona")
-    # ...and a strong candidate should not be interrogated on every single answer.
-    if persona == "strong" and followups > session.questions_asked:
+    # ...and an answer that actually earned a strong score should not be interrogated
+    # on every turn. Gate on the achieved score, not the persona label: a scripted
+    # "strong" answer that drifts off-topic on a later day has earned the follow-up.
+    if persona == "strong" and avg >= 3 and followups > session.questions_asked:
         fails.append(f"strong persona drew {followups} follow-ups for {session.questions_asked} questions")
 
     # §5.7: feedback must reference real curriculum days, not invented ones.
@@ -137,10 +148,67 @@ def check(session: Session, persona: str) -> list[str]:
     return fails
 
 
+DUMPS = Path(__file__).resolve().parent / "transcripts"
+
+
+def dump(session: Session, candidate: dict, persona: str, fails: list[str]) -> Path:
+    """Write one interview out in full so a human can read what the model did.
+
+    The assertions catch what we thought to check for. Everything else -- a
+    question that reads as a non-sequitur, a follow-up that repeats itself, a
+    reply that contradicts its own score -- is only visible by reading it.
+    """
+    DUMPS.mkdir(exist_ok=True)
+    cid = candidate["member"]["id"]
+    lines = [
+        f"candidate : {cid} ({candidate['member']['name']}, {candidate['member']['jobRole']})",
+        f"persona   : {persona}",
+        f"posture   : {session.posture.label}",
+        f"plan      : days {[p.day for p in session.plan]}",
+        f"covered   : {session.days_covered}",
+        f"failures  : {fails or 'none'}",
+        "",
+    ]
+    for i, t in enumerate(session.turns, 1):
+        a = t.assessment
+        lines += [
+            f"--- turn {i}  day {t.day}  slot {t.slot}{'  [followup]' if t.is_followup else ''}",
+            f"Q: {t.question}",
+            f"A: {t.answer or '(unanswered -- clarification or concession)'}",
+        ]
+        if a:
+            lines += [
+                f"   claims      : {a.claims}",
+                f"   knowledge   : c={a.correctness} d={a.depth} s={a.specificity}"
+                f" -> {a.score:.2f}",
+                f"   delivery    : term={a.terminology} comm={a.communication}"
+                f"{'  BLUFF' if a.bluffing else ''}{'  UNDERSOLD' if a.undersells else ''}",
+                f"   notes       : {a.notes}",
+                f"   missing     : {a.missing}",
+            ]
+        lines.append("")
+    fb = session.feedback
+    if fb:
+        lines += ["=== feedback", fb.summary, ""]
+        for field in ("strengths", "gaps", "next"):
+            lines.append(f"{field}:")
+            lines += [f"  - {x}" for x in getattr(fb, field)]
+    path = DUMPS / f"{'FAIL' if fails else 'ok'}-{cid}-{persona}.txt"
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--all", action="store_true", help="run every candidate, strong persona")
+    ap.add_argument("--all", action="store_true", help="every persona against sampled candidates")
     ap.add_argument("--live", action="store_true", help="use the configured provider (costs tokens)")
+    ap.add_argument(
+        "--sample",
+        type=int,
+        default=0,
+        help="candidates to use for --all (0 = every one; live runs default to 5)",
+    )
+    ap.add_argument("--dump", action="store_true", help="write every transcript, not just failures")
     args = ap.parse_args()
 
     # Offline by default even when .env has a key. This suite is meant to be free
@@ -192,6 +260,8 @@ def main() -> int:
         )
         for f in fails:
             print(f"         - {f}")
+        if fails or args.dump:
+            dump(session, subject, persona, fails)
         failures += len(fails)
 
     # 3. Context budget: the transcript must stay bounded across a full interview.
@@ -246,14 +316,29 @@ def main() -> int:
         print(f"[ok]   bluffer {results['bluffer']} < strong {results['strong']}")
 
     if args.all:
-        for c in candidates:
-            session = run(c, PERSONAS["strong"])
-            fails = check(session, "strong")
-            failures += len(fails)
-            print(
-                f"[{'ok  ' if not fails else 'FAIL'}] {c['member']['id']} "
-                f"posture={session.posture.label} days={session.days_covered}"
-            )
+        # Every persona against a spread of candidates. Offline this is free, so run
+        # the lot; live it is one provider call per turn, so sample -- 5 candidates x
+        # 7 personas is already ~250 calls against a 200k/day allowance.
+        n = args.sample or (5 if args.live else len(candidates))
+        subjects = candidates[:: max(1, len(candidates) // n)][:n]
+        print(f"\nmatrix: {len(subjects)} candidates x {len(PERSONAS)} personas")
+        written: list[Path] = []
+        for c in subjects:
+            for persona, answer in PERSONAS.items():
+                session = run(c, answer)
+                fails = check(session, persona)
+                failures += len(fails)
+                if fails or args.dump:
+                    written.append(dump(session, c, persona, fails))
+                print(
+                    f"[{'ok  ' if not fails else 'FAIL'}] {c['member']['id']:<12} "
+                    f"{persona:<12} posture={session.posture.label:<18} "
+                    f"days={session.days_covered}"
+                )
+                for f in fails:
+                    print(f"         - {f}")
+        if written:
+            print(f"\n{len(written)} transcripts written to {DUMPS}")
 
     print(f"\n{'PASS' if failures == 0 else f'{failures} FAILURES'}")
     return 1 if failures else 0
