@@ -30,6 +30,10 @@ export function CandidatePicker({
           Pick a candidate. The agent reads their 31-day cohort record, builds an interview plan
           from what they struggled with, skipped, or passed too easily, and adapts as they answer.
         </p>
+        <p className="mt-3 max-w-xl text-[13px] leading-relaxed text-faint">
+          Good answers lead with what you actually built — numbers, trade-offs, what broke —
+          over correct-sounding vocabulary.
+        </p>
       </motion.div>
 
       <div className="mt-10 grid gap-3 sm:grid-cols-2">

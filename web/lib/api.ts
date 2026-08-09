@@ -1,6 +1,10 @@
 export const API_URL =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "http://localhost:8000";
 
+// Must match ANSWER_CHAR_LIMIT in app/interviewer.py -- the backend truncates silently
+// past this, so the composer needs to warn before that happens, not after.
+export const ANSWER_CHAR_LIMIT = 6000;
+
 export type PlannedQuestion = {
   day: number;
   module: number;

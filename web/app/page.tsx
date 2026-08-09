@@ -12,6 +12,36 @@ import { API_URL, post, type Candidate, type Feedback, type Meta } from "@/lib/a
 
 type Phase = "picking" | "interview" | "report";
 
+// Mirrors app/store.py's MAX_AGE_SECONDS -- past this the backend session is gone,
+// so resuming from a stale snapshot would just fail on the next turn anyway.
+const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
+const STORAGE_KEY = "interview-session";
+
+type Snapshot = {
+  savedAt: number;
+  candidate: Candidate;
+  sessionId: string;
+  messages: Message[];
+  meta: Meta | null;
+  feedback: Feedback | null;
+  phase: Phase;
+};
+
+function loadSnapshot(): Snapshot | null {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const snap = JSON.parse(raw) as Snapshot;
+    if (Date.now() - snap.savedAt > SESSION_TTL_MS) {
+      sessionStorage.removeItem(STORAGE_KEY);
+      return null;
+    }
+    return snap;
+  } catch {
+    return null;
+  }
+}
+
 export default function Page() {
   const [phase, setPhase] = useState<Phase>("picking");
   const [candidates, setCandidates] = useState<Candidate[]>([]);
@@ -22,6 +52,28 @@ export default function Page() {
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [failedText, setFailedText] = useState<string | null>(null);
+
+  // Restore an in-progress interview after a refresh. There is no safe way to ask
+  // the backend "what state is this session in" -- the one endpoint would consume
+  // a real turn -- so this replays the client's own last-known snapshot instead,
+  // which is exactly what the backend still holds as long as the TTL hasn't passed.
+  useEffect(() => {
+    const snap = loadSnapshot();
+    if (!snap) return;
+    setCandidate(snap.candidate);
+    setSessionId(snap.sessionId);
+    setMessages(snap.messages);
+    setMeta(snap.meta);
+    setFeedback(snap.feedback);
+    setPhase(snap.phase);
+  }, []);
+
+  useEffect(() => {
+    if (phase === "picking" || !candidate) return;
+    const snap: Snapshot = { savedAt: Date.now(), candidate, sessionId, messages, meta, feedback, phase };
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(snap));
+  }, [phase, candidate, sessionId, messages, meta, feedback]);
 
   useEffect(() => {
     fetch(`${API_URL}/api/candidates`)
@@ -50,11 +102,14 @@ export default function Page() {
     }
   }, []);
 
+  // isRetry skips the optimistic transcript push -- the message from the failed
+  // attempt is already showing, so retrying it must not duplicate the bubble.
   const send = useCallback(
-    async (text: string) => {
-      setMessages((m) => [...m, { role: "candidate", text }]);
+    async (text: string, isRetry = false) => {
+      if (!isRetry) setMessages((m) => [...m, { role: "candidate", text }]);
       setBusy(true);
       setError(null);
+      setFailedText(null);
       try {
         const res = await post({ sessionId, message: text });
         setMeta(res.meta ?? null);
@@ -73,6 +128,9 @@ export default function Page() {
         }
       } catch (e) {
         setError(e instanceof Error ? e.message : "The interviewer is unavailable.");
+        // The candidate's answer is already visible in the transcript -- give them a
+        // way to resend it rather than making them retype into a stuck conversation.
+        setFailedText(text);
       } finally {
         setBusy(false);
       }
@@ -80,7 +138,12 @@ export default function Page() {
     [sessionId],
   );
 
+  const retry = useCallback(() => {
+    if (failedText) send(failedText, true);
+  }, [failedText, send]);
+
   const restart = useCallback(() => {
+    sessionStorage.removeItem(STORAGE_KEY);
     setPhase("picking");
     setCandidate(null);
     setMessages([]);
@@ -132,12 +195,12 @@ export default function Page() {
         />
         <Composer onSend={send} disabled={busy} />
       </div>
-      <ErrorBar error={error} />
+      <ErrorBar error={error} onRetry={failedText ? retry : undefined} />
     </div>
   );
 }
 
-function ErrorBar({ error }: { error: string | null }) {
+function ErrorBar({ error, onRetry }: { error: string | null; onRetry?: () => void }) {
   return (
     <AnimatePresence>
       {error && (
@@ -147,9 +210,17 @@ function ErrorBar({ error }: { error: string | null }) {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 12 }}
           transition={{ duration: 0.25 }}
-          className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-xl border border-line bg-panel px-4 py-3 text-[13px] text-bad shadow-lg"
+          className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-xl border border-line bg-panel px-4 py-3 text-[13px] shadow-lg"
         >
-          {error}
+          <span className="text-bad">{error}</span>
+          {onRetry && (
+            <button
+              onClick={onRetry}
+              className="shrink-0 rounded-lg border border-line bg-panel-2 px-2.5 py-1 text-[12px] font-medium text-text transition-colors hover:bg-line"
+            >
+              Retry
+            </button>
+          )}
         </motion.div>
       )}
     </AnimatePresence>

@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { ANSWER_CHAR_LIMIT } from "@/lib/api";
+
+const WARN_AT = ANSWER_CHAR_LIMIT - 1000; // give a heads-up before the hard cutoff
 
 export function Composer({
   onSend,
@@ -34,6 +37,29 @@ export function Composer({
 
   return (
     <div className="border-t border-line bg-panel px-5 py-4 sm:px-8">
+      {/* Optional nudges for a candidate who freezes rather than types nothing. Both
+          phrases are ordinary natural language the model already classifies (intent
+          "concede" / "clarify") -- these are a shortcut to typing them, not a new
+          code path. Hidden once they start typing so they never look like the only
+          two valid replies. */}
+      {!disabled && !value && (
+        <div className="mx-auto mb-2 flex max-w-2xl gap-2">
+          <button
+            type="button"
+            onClick={() => onSend("I don't know this one, honestly.")}
+            className="rounded-full border border-line px-3 py-1 text-[12px] text-muted transition-colors hover:bg-panel-2"
+          >
+            I don't know this one
+          </button>
+          <button
+            type="button"
+            onClick={() => onSend("Can you clarify the question?")}
+            className="rounded-full border border-line px-3 py-1 text-[12px] text-muted transition-colors hover:bg-panel-2"
+          >
+            Ask for clarification
+          </button>
+        </div>
+      )}
       <div className="mx-auto flex max-w-2xl items-end gap-3">
         <textarea
           ref={ref}
@@ -59,9 +85,20 @@ export function Composer({
           Send
         </button>
       </div>
-      <p className="mx-auto mt-2 max-w-2xl text-[11px] text-faint">
-        Enter to send · Shift+Enter for a new line
-      </p>
+      <div className="mx-auto mt-2 flex max-w-2xl items-center justify-between">
+        <p className="text-[11px] text-faint">Enter to send · Shift+Enter for a new line</p>
+        {value.length >= WARN_AT && (
+          <p
+            className={`mono text-[11px] ${
+              value.length >= ANSWER_CHAR_LIMIT ? "text-bad" : "text-warn"
+            }`}
+          >
+            {value.length >= ANSWER_CHAR_LIMIT
+              ? `${value.length - ANSWER_CHAR_LIMIT} chars will be cut`
+              : `${ANSWER_CHAR_LIMIT - value.length} chars left`}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

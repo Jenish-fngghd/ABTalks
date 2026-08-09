@@ -1,7 +1,37 @@
 "use client";
 
 import { motion } from "motion/react";
+import { useState } from "react";
 import type { Feedback, Meta } from "@/lib/api";
+
+function toMarkdown(name: string, feedback: Feedback, meta: Meta, overall: number, comms?: number): string {
+  const lines = [
+    `# Interview report — ${name}`,
+    "",
+    `${meta.questionsAsked} questions across ${meta.daysCovered.length} curriculum days`,
+    `Knowledge: ${overall.toFixed(1)}/5.0${comms !== undefined ? `  ·  Communication: ${comms.toFixed(1)}/5.0` : ""}`,
+    "",
+    "## Summary",
+    feedback.summary,
+    "",
+    "## Strengths",
+    ...feedback.strengths.map((s) => `- ${s}`),
+    "",
+    "## Gaps",
+    ...feedback.gaps.map((s) => `- ${s}`),
+    "",
+    "## Next steps",
+    ...feedback.next.map((s) => `- ${s}`),
+  ];
+  if (meta.perDay?.length) {
+    lines.push("", "## By curriculum day");
+    for (const d of meta.perDay) {
+      const tags = [d.bluffing && "bluff", d.undersells && "undersold"].filter(Boolean).join(", ");
+      lines.push(`- Day ${d.day} — ${d.title}: ${d.score.toFixed(1)}/5${tags ? ` (${tags})` : ""}`);
+    }
+  }
+  return lines.join("\n");
+}
 
 const AXES: { key: string; label: string; note: string; group: string }[] = [
   { key: "correctness", label: "Correctness", note: "Was it technically true?", group: "What you know" },
@@ -33,6 +63,7 @@ export function Report({
   name: string;
   onRestart: () => void;
 }) {
+  const [copied, setCopied] = useState(false);
   const axes = AXES.filter((a) => meta.dimensions?.[a.key] !== undefined);
   // Headline is knowledge only. Communication is reported beside it, never averaged
   // into it -- they are different problems with different fixes.
@@ -49,20 +80,35 @@ export function Report({
   // The opposite, and the more fixable one: knows it, explains it badly.
   const undersold = overall >= 3 && comms !== undefined && comms <= 2;
 
+  async function copyReport() {
+    await navigator.clipboard.writeText(toMarkdown(name, feedback, meta, overall, comms));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   return (
     <main className="mx-auto max-w-3xl px-5 py-12 sm:px-8 sm:py-16">
       <motion.header
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
+        className="flex items-start justify-between gap-4"
       >
-        <p className="mono text-[11px] uppercase tracking-[0.16em] text-faint">
-          Interview complete
-        </p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">{name}</h1>
-        <p className="mt-1 text-[14px] text-muted">
-          {meta.questionsAsked} questions across {meta.daysCovered.length} curriculum days
-        </p>
+        <div>
+          <p className="mono text-[11px] uppercase tracking-[0.16em] text-faint">
+            Interview complete
+          </p>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">{name}</h1>
+          <p className="mt-1 text-[14px] text-muted">
+            {meta.questionsAsked} questions across {meta.daysCovered.length} curriculum days
+          </p>
+        </div>
+        <button
+          onClick={copyReport}
+          className="mono shrink-0 rounded-lg border border-line bg-panel px-3 py-2 text-[12px] text-muted transition-colors hover:bg-panel-2"
+        >
+          {copied ? "Copied" : "Copy report"}
+        </button>
       </motion.header>
 
       <motion.section
