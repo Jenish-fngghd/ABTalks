@@ -125,6 +125,12 @@ def build_plan(candidate: dict, size: int = MIN_QUESTIONS) -> list[PlannedQuesti
     plan: list[PlannedQuestion] = []
     per_day: dict[int, int] = {}
     modules: set[int] = set()
+    # A skipped day that gets bridged asks about a *different* day (the via day), so
+    # per_day -- keyed by the day actually asked -- never marks the skipped day's own
+    # number as spoken for. Without this, the same skipped-day signal survived into
+    # the next pass and got bridged again, producing two identical questions instead
+    # of the second slot going to a fresh topic.
+    planned_signal_days: set[int] = set()
 
     def _bridge_target(gap: int) -> int | None:
         """Nearest later day the candidate actually has a record for.
@@ -169,6 +175,7 @@ def build_plan(candidate: dict, size: int = MIN_QUESTIONS) -> list[PlannedQuesti
         )
         per_day[ask_day] = per_day.get(ask_day, 0) + 1
         modules.add(cur.module_num(ask_day))
+        planned_signal_days.add(sig.day)
 
     # Days the record actually mentions are exhausted before any unrecorded day is
     # considered: the brief is to assess "the concepts they have completed".
@@ -180,7 +187,7 @@ def build_plan(candidate: dict, size: int = MIN_QUESTIONS) -> list[PlannedQuesti
     for sig in known:
         if len(plan) >= size:
             break
-        if per_day.get(sig.day) or cur.module_num(sig.day) in modules:
+        if sig.day in planned_signal_days or cur.module_num(sig.day) in modules:
             continue
         take(sig)
 
@@ -190,14 +197,21 @@ def build_plan(candidate: dict, size: int = MIN_QUESTIONS) -> list[PlannedQuesti
     for sig in known:
         if len(plan) >= size:
             break
-        if per_day.get(sig.day):
+        if sig.day in planned_signal_days:
             continue
         take(sig)
 
     # Pass 3: depth. Second question on the highest-priority recorded days.
+    # Bridged (skipped) signals are excluded here, not just deferred by the
+    # per_day check below -- per_day is keyed by the day actually asked (the
+    # bridge target), not sig.day, so it can never see that a skipped signal was
+    # already spent, and would bridge the same gap a second time. There is no
+    # depth to chase for a day the candidate never touched anyway.
     for sig in known:
         if len(plan) >= size:
             break
+        if sig.status == "skipped":
+            continue
         if per_day.get(sig.day, 0) >= MAX_PER_DAY:
             continue
         take(sig)

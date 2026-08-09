@@ -53,6 +53,11 @@ export default function Page() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [failedText, setFailedText] = useState<string | null>(null);
+  // A resumed snapshot can outlive the backend session it points at (server
+  // restart, or just past the TTL). That failure is permanent -- retrying the
+  // same request fails again forever -- so it gets its own recovery action
+  // instead of being offered a "Retry" that can never succeed.
+  const [sessionLost, setSessionLost] = useState(false);
 
   // Restore an in-progress interview after a refresh. There is no safe way to ask
   // the backend "what state is this session in" -- the one endpoint would consume
@@ -110,6 +115,7 @@ export default function Page() {
       setBusy(true);
       setError(null);
       setFailedText(null);
+      setSessionLost(false);
       try {
         const res = await post({ sessionId, message: text });
         setMeta(res.meta ?? null);
@@ -127,10 +133,18 @@ export default function Page() {
           setTimeout(() => setPhase("report"), 900);
         }
       } catch (e) {
-        setError(e instanceof Error ? e.message : "The interviewer is unavailable.");
-        // The candidate's answer is already visible in the transcript -- give them a
-        // way to resend it rather than making them retype into a stuck conversation.
-        setFailedText(text);
+        const message = e instanceof Error ? e.message : "The interviewer is unavailable.";
+        setError(message);
+        if (message.includes("Unknown sessionId")) {
+          // The snapshot this page resumed from points at a session the backend no
+          // longer has. Clear it now so a stale resume can't happen again.
+          sessionStorage.removeItem(STORAGE_KEY);
+          setSessionLost(true);
+        } else {
+          // The candidate's answer is already visible in the transcript -- give
+          // them a way to resend it rather than retyping into a stuck conversation.
+          setFailedText(text);
+        }
       } finally {
         setBusy(false);
       }
@@ -195,12 +209,31 @@ export default function Page() {
         />
         <Composer onSend={send} disabled={busy} />
       </div>
-      <ErrorBar error={error} onRetry={failedText ? retry : undefined} />
+      <ErrorBar
+        error={error}
+        onRetry={failedText ? retry : undefined}
+        onRestart={sessionLost ? restart : undefined}
+        // The composer (textarea + quick-reply chips + helper text) occupies real
+        // space at the bottom of the interview screen -- bottom-6 alone put the
+        // toast underneath it. The picker screen has no composer, so the larger
+        // offset there just reads as generous spacing, not a collision to avoid.
+        raised
+      />
     </div>
   );
 }
 
-function ErrorBar({ error, onRetry }: { error: string | null; onRetry?: () => void }) {
+function ErrorBar({
+  error,
+  onRetry,
+  onRestart,
+  raised,
+}: {
+  error: string | null;
+  onRetry?: () => void;
+  onRestart?: () => void;
+  raised?: boolean;
+}) {
   return (
     <AnimatePresence>
       {error && (
@@ -210,9 +243,17 @@ function ErrorBar({ error, onRetry }: { error: string | null; onRetry?: () => vo
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 12 }}
           transition={{ duration: 0.25 }}
-          className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-xl border border-line bg-panel px-4 py-3 text-[13px] shadow-lg"
+          className={`fixed left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-xl border border-line bg-panel px-4 py-3 text-[13px] shadow-lg ${raised ? "bottom-32" : "bottom-6"}`}
         >
           <span className="text-bad">{error}</span>
+          {onRestart && (
+            <button
+              onClick={onRestart}
+              className="shrink-0 rounded-lg border border-line bg-panel-2 px-2.5 py-1 text-[12px] font-medium text-text transition-colors hover:bg-line"
+            >
+              Start new interview
+            </button>
+          )}
           {onRetry && (
             <button
               onClick={onRetry}

@@ -229,11 +229,19 @@ def main() -> int:
         plan = build_plan(c)
         assert len(plan) >= MIN_QUESTIONS, f"{c['member']['id']} plan too short"
         assert len({p.day for p in plan}) >= MIN_DAYS, f"{c['member']['id']} plan too narrow"
+        seen_slots = set()
         for q in plan:
             # A bridged question must ask about a day strictly later than the gap
             # it probes, or the prerequisite reasoning is backwards.
             if q.gap_day is not None:
                 assert q.day > q.gap_day, f"{c['member']['id']} bridges backwards"
+            # (day, intent, gap_day) identifies a distinct question; a repeat means
+            # a real slot was wasted re-asking something instead of covering new
+            # ground -- this is what the per_day/planned_signal_days bookkeeping in
+            # build_plan exists to prevent.
+            slot_key = (q.day, q.intent, q.gap_day)
+            assert slot_key not in seen_slots, f"{c['member']['id']} duplicate slot {slot_key}"
+            seen_slots.add(slot_key)
         bridged += any(q.gap_day is not None for q in plan)
         # The brief is to assess "the concepts they have completed", so a plan may
         # only reach for a day the record does not mention once every recorded day
