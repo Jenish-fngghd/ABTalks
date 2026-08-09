@@ -217,10 +217,13 @@ bluffer, silent, adversarial** — and asserts:
 ```
 $ python -m eval.run_eval --all
 [ok]   plan coverage floor holds for all 20 candidates
-[ok  ] strong       questions=8 days=[7, 8, 10, 12, 16, 28, 29, 31] avg=4.0
-[ok  ] bluffer      questions=8 days=[7, 8, 10, 12, 16, 28, 29, 31] avg=2.0
-[ok  ] adversarial  questions=8 days=[7, 8, 10, 12, 16, 28, 29, 31] avg=0.67
+[ok  ] strong       questions=8 days=[7, 10, 12, 16, 22, 28, 31] avg=4.0
+[ok  ] bluffer      questions=8 days=[7, 10, 12, 16, 22, 28, 31] avg=2.0
+[ok  ] adversarial  questions=8 days=[7, 10, 12, 16, 22, 28, 31] avg=0.67
 [ok]   bluffer 2.0 < strong 4.0
+...
+matrix: 20 candidates x 7 personas   # every persona, every candidate
+...
 PASS
 ```
 
