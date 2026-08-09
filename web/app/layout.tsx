@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { MotionConfig } from "motion/react";
-import { Instrument_Sans, Fraunces } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
 // Runs before paint so the toggle's stored choice never flashes the wrong theme
@@ -12,18 +12,23 @@ const THEME_INIT_SCRIPT = `
   } catch (e) {}
 `;
 
-// Geometric-sans + editorial-serif pairing -- both OFL-licensed via next/font/google
-// (self-hosted at build, no runtime request, no licensing ambiguity). Instrument Sans
-// carries all UI text; Fraunces is reserved for display moments only (see .font-display).
-const instrumentSans = Instrument_Sans({
-  subsets: ["latin"],
+// Matter carries all UI text; SeasonMix is reserved for display moments only
+// (see .font-display). Self-hosted local fonts, no runtime request.
+const matter = localFont({
+  src: [
+    { path: "./fonts/MatterRegular.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/MatterMedium.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/MatterSemiBold.woff2", weight: "600", style: "normal" },
+  ],
   variable: "--font-sans",
   display: "swap",
 });
-const fraunces = Fraunces({
-  subsets: ["latin"],
+const seasonMix = localFont({
+  src: [
+    { path: "./fonts/SeasonMix-Regular.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/SeasonMix-Medium.woff2", weight: "500", style: "normal" },
+  ],
   variable: "--font-display",
-  style: ["normal", "italic"],
   display: "swap",
 });
 
@@ -37,7 +42,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
-      className={`${instrumentSans.variable} ${fraunces.variable}`}
+      className={`${matter.variable} ${seasonMix.variable}`}
       // The theme-init script deliberately sets data-theme on this element before
       // React hydrates, which will never match the server-rendered markup (the
       // server can't know the client's stored preference). That's the intended

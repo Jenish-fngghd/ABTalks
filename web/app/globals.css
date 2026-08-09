@@ -85,11 +85,10 @@ body {
 }
 
 /* Reserved for display moments -- headline greeting, the score reveal, the
-   candidate's name on the report. Everything else stays in the UI sans; a serif on
+   candidate's name on the report. Everything else stays in the UI sans; decorating
    every heading reads as decorated, not premium. */
 .font-display {
-  font-family: var(--font-display), Georgia, serif;
-  font-optical-sizing: auto;
+  font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
 }
 
 ::selection {
