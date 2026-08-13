@@ -1,6 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { Orb } from "@/components/Orb";
 import type { Meta } from "@/lib/api";
 
 const POP = { type: "spring", stiffness: 640, damping: 22, mass: 0.7 } as const;
@@ -20,10 +21,14 @@ const POSTURE_LABEL: Record<string, string> = {
 };
 
 /**
- * The interview plan, visible. Every question the agent will ask, why it chose
- * that curriculum day, and how far through it is. This is the part that
- * distinguishes an adaptive interviewer from a chatbot with a question list, so
- * it gets a permanent panel rather than being hidden behind the transcript.
+ * The interview plan, visible -- but only in hindsight. Every question already
+ * asked shows its day, topic, and why the agent chose it, so the reasoning
+ * stays auditable (this project's whole differentiator: an adaptive
+ * interviewer, not a chatbot reading a fixed script). Questions not yet
+ * reached show only as a locked placeholder, ordinal position and nothing
+ * else -- the candidate can see how many are left without the plan spoiling
+ * what's coming, the way a real interviewer wouldn't show you their notes for
+ * a question they haven't asked yet.
  */
 export function CoveragePanel({ meta }: { meta: Meta | null }) {
   if (!meta) return null;
@@ -46,13 +51,7 @@ export function CoveragePanel({ meta }: { meta: Meta | null }) {
       />
       <div className="relative">
         <div className="flex items-center gap-2">
-          {/* A four-point spark reads clearly at this size; the eight-point version
-              (see ThinkingGlyph) needs more pixels to avoid collapsing into a plus
-              sign, so this is a deliberately simpler mark, not the same glyph scaled
-              down. */}
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="shrink-0 text-accent">
-            <path d="M12 2 Q13 10.5 22 12 Q13 13.5 12 22 Q11 13.5 2 12 Q11 10.5 12 2 Z" fill="currentColor" />
-          </svg>
+          <Orb size={14} />
           <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-faint">
             Interview plan
           </h2>
@@ -81,8 +80,9 @@ export function CoveragePanel({ meta }: { meta: Meta | null }) {
         {meta.plan.map((q, i) => {
           const covered = meta.daysCovered.includes(q.day);
           const current = i === meta.currentSlot;
+          const locked = i > meta.currentSlot;
           return (
-            <li key={`${q.day}-${i}`}>
+            <li key={i}>
               <motion.div
                 initial={false}
                 animate={{
@@ -93,29 +93,51 @@ export function CoveragePanel({ meta }: { meta: Meta | null }) {
                 className="rounded-lg px-3 py-2.5"
               >
                 <div className="flex items-start gap-2.5">
-                  <StatusDot covered={covered} current={current} />
+                  <StatusDot covered={covered} current={current} locked={locked} />
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-baseline gap-2">
-                      <span className="mono text-[11px] text-faint">Day {q.day}</span>
-                      <span className="mono text-[10px] uppercase tracking-wider text-accent">
-                        {INTENT_LABEL[q.intent] ?? q.intent}
-                      </span>
-                    </div>
-                    {current ? (
-                      <ShimmerLabel text={q.topic} />
-                    ) : (
-                      <p className="truncate text-[13px] leading-snug text-muted">{q.topic}</p>
-                    )}
-                    {current && (
-                      <motion.p
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        transition={{ duration: 0.3 }}
-                        className="mt-1.5 text-[12px] leading-relaxed text-muted"
-                      >
-                        {q.reason}
-                      </motion.p>
-                    )}
+                    <AnimatePresence mode="wait" initial={false}>
+                      {locked ? (
+                        <motion.p
+                          key="locked"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="mono text-[12px] text-faint"
+                        >
+                          Question {i + 1}
+                        </motion.p>
+                      ) : (
+                        <motion.div
+                          key="revealed"
+                          initial={{ opacity: 0, filter: "blur(4px)" }}
+                          animate={{ opacity: 1, filter: "blur(0px)" }}
+                          transition={{ duration: 0.4 }}
+                        >
+                          <div className="flex items-baseline gap-2">
+                            <span className="mono text-[11px] text-faint">Day {q.day}</span>
+                            <span className="mono text-[10px] uppercase tracking-wider text-accent">
+                              {INTENT_LABEL[q.intent] ?? q.intent}
+                            </span>
+                          </div>
+                          {current ? (
+                            <ShimmerLabel text={q.topic} />
+                          ) : (
+                            <p className="truncate text-[13px] leading-snug text-muted">{q.topic}</p>
+                          )}
+                          {current && (
+                            <motion.p
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: "auto" }}
+                              transition={{ duration: 0.3 }}
+                              className="mt-1.5 text-[12px] leading-relaxed text-muted"
+                            >
+                              {q.reason}
+                            </motion.p>
+                          )}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
                 </div>
               </motion.div>
@@ -131,9 +153,7 @@ export function CoveragePanel({ meta }: { meta: Meta | null }) {
           session: the interviewer itself. */}
       <div className="mt-auto flex items-center gap-2.5 border-t border-line pt-4">
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-soft">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="text-accent">
-            <path d="M12 1 L14 10 L23 12 L14 14 L12 23 L10 14 L1 12 L10 10 Z" fill="currentColor" />
-          </svg>
+          <Orb size={14} />
         </span>
         <div className="min-w-0 leading-tight">
           <p className="truncate text-[12px] font-medium text-text">Interviewer</p>
@@ -150,8 +170,26 @@ export function CoveragePanel({ meta }: { meta: Meta | null }) {
 // (everything before `current` is done) where this plan is slot-based against
 // daysCovered and has no error state, but the covered-tick animation and the
 // active-row text treatment are a real upgrade over the flat dots this had.
-function StatusDot({ covered, current }: { covered: boolean; current: boolean }) {
+function StatusDot({
+  covered,
+  current,
+  locked,
+}: {
+  covered: boolean;
+  current: boolean;
+  locked: boolean;
+}) {
   const reduced = useReducedMotion();
+  if (locked) {
+    return (
+      <span className="mt-1 grid h-3.5 w-3.5 shrink-0 place-items-center text-faint">
+        <svg viewBox="0 0 24 24" width="9" height="9" fill="none" aria-hidden>
+          <rect x="5" y="10" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="2" />
+          <path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" strokeWidth="2" />
+        </svg>
+      </span>
+    );
+  }
   if (current) {
     return (
       <span className="relative mt-1.5 block h-2 w-2 shrink-0">
